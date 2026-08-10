@@ -1,0 +1,50 @@
+<resources>
+    <string name="app_name">Traincontrolauto</string>
+    <string name="home_address_label">Heimadresse (Abfahrt):</string>
+    <string name="work_address_label">Arbeitsadresse (Ziel):</string>
+    <string name="operators_label">Betreiber &amp; Zugkategorien:</string>
+    <string name="settings_saved">Einstellungen gespeichert!</string>
+    <string name="wait_moment">Bitte einen Moment warten&#8230;</string>
+    <string name="no_internet">Keine Internetverbindung vorhanden.</string>
+    <string name="no_location">Standort konnte nicht ermittelt werden.</string>
+    <string name="no_departures">Keine passenden Abfahrten gefunden.</string>
+    <string name="operator_format"> • %1$s</string>
+    <string name="error_identical_addresses">Heim- und Arbeitsadresse dürfen nicht identisch sein!</string>
+    <string name="error_identical_stations">Abfahrtsbahnhof und Zielbahnhof sind identisch.</string>
+    <string name="location_label">Standort: %1$s</string>
+    <string name="other_station_link"><u>Anderer Abfahrtsbahnhof...</u></string>
+    <string name="direction_question">Wohin möchtest du fahren?</string>
+    <string name="to_work_button">%1$s</string>
+    <string name="to_home_button">%1$s</string>
+    <string name="cancel_button">Abbrechen</string>
+    <string name="departure_station_label">Abfahrtsbahnhof:</string>
+    <string name="departure_station_format">Abfahrtsbahnhof: %1$s</string>
+    <string name="train_item_header"><b>%1$d. Train n. %2$s to:</b></string>
+    <string name="departure_time_format">Abfahrt: %1$s Uhr</string>
+    <string name="stops_true_format">Halt: &lt;font color=\'#2E7D32\'&gt;&lt;b&gt;✓ Hält in %1$s&lt;/b&gt;&lt;/font&gt;</string>
+    <string name="stops_false_format">Halt: &lt;font color=\'#D32F2F\'&gt;&lt;b&gt;⚠️ Hält NICHT in %1$s!&lt;/b&gt;&lt;/font&gt;</string>
+    <string name="platform_bus_label">Gleis: &lt;font color=\'#D32F2F\'&gt;&lt;b&gt;BUS!!&lt;/b&gt;&lt;/font&gt;</string>
+    <string name="platform_label_format">Gleis: %1$s</string>
+    <string name="delay_label_format">Verspätung: %1$s</string>
+    <string name="delay_label_critical_format">Verspätung: &lt;font color=\'#D32F2F\'&gt;&lt;b&gt;%1$s&lt;/b&gt;&lt;/font&gt;</string>
+    <string name="settings_dialog_title">Bahnhofs-Einstellungen</string>
+    <string name="save_action">Speichern</string>
+    <string name="target_station_label">Zielbahnhof:</string>
+    <string name="select_target_label">Zielbahnhof wählen:</string>
+    <string name="other_target_button">Anderes Ziel wählen&#8230;</string>
+    <string name="train_status_cancelled">AUSGEFALLEN (SOPPRESSO)</string>
+    <string name="train_status_ontime">Pünktlich (0\')</string>
+    <string name="train_status_delayed_format">+%1$s min</string>
+    <string name="default_train_category">Zug</string>
+    <string name="battery_opt_title">Hintergrund-Ausführung</string>
+    <string name="battery_opt_message">Damit die Züge auch bei ausgeschaltetem Bildschirm (z.B. über Routines) abgerufen werden können, muss die Akku-Optimierung für diese App deaktiviert werden.</string>
+    <string name="battery_opt_allow">Erlauben</string>
+    <string name="battery_opt_later">Später</string>
+    <string name="change_station_title">Bahnhof wechseln</string>
+    <string name="search_action">Suchen</string>
+    <string name="cat_group_regional">Regionalverkehr</string>
+    <string name="cat_group_long_distance">Fernverkehr &amp; High-Speed</string>
+    <string name="notification_channel_name">Eilige Zug-Verspätungen</string>
+    <string name="notification_channel_description">Sofortige Benachrichtigungen für Zugverspätungen</string>
+    <string name="alarm_label">Alarm bei Verspätung für:</string>
+</resources>
