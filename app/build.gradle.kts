@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.traincontrolauto"
+    namespace = "com.example.traincontrolstmobilandroid"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.traincontrolauto"
+        applicationId = "com.example.traincontrolstmobilandroid"
         minSdk = 31
         targetSdk = 37
         versionCode = 1

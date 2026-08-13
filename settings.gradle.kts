@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "traincontrolauto"
+rootProject.name = "TrainControlSTmobilAndroid"
 include(":app")
  
