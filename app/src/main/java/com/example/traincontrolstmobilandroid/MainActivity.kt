@@ -20,7 +20,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import java.util.Locale
 import android.view.Gravity
 import android.widget.ArrayAdapter
 import android.widget.CheckBox
@@ -45,7 +44,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
-import org.jsoup.nodes.Element
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.LocalDateTime
@@ -65,7 +63,18 @@ data class TrainInfo(
     val rfiDelay: String? = null,
     val rfiStatus: String? = null,
     val lineTerminal: String? = null,
-)
+) {
+    val hasAnyDelay: Boolean
+        get() = hasDelay || rfiStatus == "Verspätung" || rfiStatus == "entfällt"
+
+    val bestDelayInfo: String
+        get() = when {
+            hasDelay -> delay
+            rfiStatus == "entfällt" -> "RFI: entfällt"
+            rfiStatus == "Verspätung" -> "RFI: ${rfiDelay ?: "+?"}"
+            else -> delay
+        }
+}
 
 data class StationData(
     val name: String,
@@ -85,6 +94,8 @@ data class CategoryFilter(
 
 class MainActivity : AppCompatActivity() {
 
+    // Den ToneGenerator als Variable speichern, damit er nicht jedes Mal neu geladen werden muss
+    private var alarmToneGenerator: ToneGenerator? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var prefs: SharedPreferences
 
@@ -94,53 +105,6 @@ class MainActivity : AppCompatActivity() {
 
         private const val REQUEST_LOCATION_PERMISSION = 1001
         private const val REQUEST_NOTIFICATION_PERMISSION = 2001
-
-        /*
-         * Die Meran-Linie:
-         *
-         * Meran / Merano
-         * Mals / Malles
-         * Schlanders / Silandro
-         * Terlan / Terlano
-         * Gargazon / Gargazzone
-         *
-         * Diese Aliase werden nur zur Erkennung
-         * der Meraner Streckenrichtung verwendet.
-         */
-        val MERAN_LINE_ALIASES = listOf(
-            "MALLES",
-            "MALS",
-            "SILANDRO",
-            "SCHLANDERS",
-            "MERANO",
-            "MERAN",
-            "MERANO MAIA",
-            "MERAN-UNTERMAIS",
-            "LANA",
-            "BURGSTALL",
-            "LANA-POSTAL",
-            "LANA-BURGSTALL",
-            "GARGAZZONE",
-            "GARGAZON",
-            "VILPIAN",
-            "NALS",
-            "VILPIANO-NALLES",
-            "VILPIAN-NALS",
-            "TERLAN",
-            "TERLANO",
-            "TERLANO-ANDRIANO",
-            "TERLAN-ANDRIAN",
-            "SETTEQUERCE",
-            "SIEBENEICH",
-            "PONTE D'ADIGE",
-            "SIGMUNDSKRON",
-            "BOLZANO CASANOVA",
-            "BOZEN KAISERAU",
-            "BOLZANO SUD",
-            "BOZEN SÜD"
-        )
-
-
 
         val CATEGORY_GROUPS = mapOf(
 
@@ -258,7 +222,14 @@ class MainActivity : AppCompatActivity() {
             "TrainControlSTmobilPrefs",
             MODE_PRIVATE
         )
+        // NEU: Audio-Kanal einmalig "vorheizen", um Verzögerungen und Knacken zu vermeiden
+        try {
+            alarmToneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
+        val currentTime = System.currentTimeMillis()
         if (allStations.isEmpty()) {
             Toast.makeText(
                 this,
@@ -268,8 +239,6 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
-
-        val currentTime = System.currentTimeMillis()
 
         if ((currentTime - lastExecutionTime) < 5000) {
             Toast.makeText(
@@ -825,19 +794,6 @@ class MainActivity : AppCompatActivity() {
         targetStation: StationData
     ) {
 
-        // Meraner Linie erkennen
-        val fromIsMeranLine = MERAN_LINE_ALIASES.any { alias ->
-            currentStation.aliases.any {
-                it.equals(alias, ignoreCase = true)
-            }
-        }
-
-        val targetIsMeranLine = MERAN_LINE_ALIASES.any { alias ->
-            targetStation.aliases.any {
-                it.equals(alias, ignoreCase = true)
-            }
-        }
-
         // Fahrtrichtung bestimmen wird nicht mehr benötigt (EFA regelt das)
         lifecycleScope.launch(Dispatchers.IO) {
             val trains = fetchAndParseTrains(currentStation, targetStation)
@@ -852,7 +808,7 @@ class MainActivity : AppCompatActivity() {
 
             val delayedTrain =
                 relevantTrains.asSequence().take(alarmTrainCount).firstOrNull {
-                    it.hasDelay
+                    it.hasAnyDelay
                 }
 
             lastExecutionTime =
@@ -877,7 +833,7 @@ class MainActivity : AppCompatActivity() {
                             "Zug ${delayedTrain.categoryNumber}\n" +
                                     "nach ${delayedTrain.destination}\n" +
                                     "${delayedTrain.time} Uhr\n" +
-                                    "Verspätung: ${delayedTrain.delay}",
+                                    "Verspätung: ${delayedTrain.bestDelayInfo}",
 
                         title =
                             "⚠️ Zugverspätung"
@@ -1009,7 +965,7 @@ class MainActivity : AppCompatActivity() {
                                 .timeout(10000)
                                 .execute()
                                 .body()
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             null
                         }
                     } ?: continue
@@ -1095,7 +1051,6 @@ class MainActivity : AppCompatActivity() {
                             ?: transpNode.optString("disassembledName").takeIf { it.isNotEmpty() } ?: "Zug"
 
                         val lineTerminal = transpNode.optJSONObject("destination")?.optString("name")
-                            ?: transpNode.optString("direction").takeIf { it.isNotEmpty() }
                             ?: transpNode.optString("destination").takeIf { it.isNotEmpty() }
                             ?: targetStation.name
 
@@ -1104,8 +1059,7 @@ class MainActivity : AppCompatActivity() {
                                 !upperCat.contains(" R ") && !upperCat.startsWith("R ") && !upperCat.contains("RV") && !upperCat.contains("RE ")
 
                         val planDate = extractDate(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "date")) ?: queryStart.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                        val planTime = extractTime(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "time"))
-                        if (planTime == null) continue
+                        val planTime = extractTime(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "time")) ?: continue
 
                         val realTime = extractTime(originNode, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime")) ?: planTime
 
@@ -1117,7 +1071,7 @@ class MainActivity : AppCompatActivity() {
 
                         val trainInfo = TrainInfo(
                             categoryNumber = transpName,
-                            destination = lineTerminal,
+                            destination = tripDestName.ifBlank { targetStation.name },
                             time = planTime,
                             delay = "pünktlich",
                             platform = originNode.optString("platformName", "-"),
@@ -1130,7 +1084,7 @@ class MainActivity : AppCompatActivity() {
                         val idx = rawTrainList.size
                         rawTrainList.add(trainInfo)
 
-                        if (realTime != null && realTime != planTime) {
+                        if (realTime != planTime) {
                             val plannedLocalTime = parseLocalTime(planTime)
                             val actualLocalTime = parseLocalTime(realTime)
                             if (plannedLocalTime != null && actualLocalTime != null) {
@@ -1159,7 +1113,7 @@ class MainActivity : AppCompatActivity() {
                     val rfiDoc = withContext(Dispatchers.IO) {
                         try {
                             Jsoup.connect(rfiUrl).timeout(8000).userAgent("Mozilla/5.0").get()
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             null
                         }
                     }
@@ -1201,7 +1155,7 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Ignore RFI errors
                 }
 
@@ -1214,99 +1168,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         return rawTrainList.sortedBy { it.time }
-    }
-
-    // ====================================================================
-    // PRÜFUNG: HÄLT DER ZUG AM ZIEL (RFI-MONITOR)
-    // ====================================================================
-
-    private fun checkTrainStopsInRfiRow(
-        row: Element,
-        targetStation: StationData
-    ): Boolean? {
-
-        val stopText =
-            row.text()
-                .substringAfter(
-                    "FERMA A:",
-                    missingDelimiterValue = ""
-                )
-                .substringBefore("Informazioni")
-                .trim()
-
-        // Kein Info-Popup oder keine Haltestellen: nicht bewertbar.
-        if (stopText.isBlank()) {
-            return null
-        }
-
-        /*
-         * Zusätzlich zu den Aliasen berücksichtigen wir die Namen aus
-         * "Deutsch / Italienisch", beispielsweise ROMA TERMINI.
-         * Der exakte Vergleich vermeidet Fehlalarme wie BOLZANO SUD
-         * für das Ziel BOLZANO.
-         */
-        val targetNames =
-            (targetStation.aliases + targetStation.name.split("/"))
-                .asSequence()
-                .map { normalizeStationName(it) }
-                .filter { it.isNotBlank() }
-                .toSet()
-
-        val stops =
-            stopText
-                .split(Regex("""\s*-\s*"""))
-                .map { stop ->
-                    stop
-                        .replace(
-                            Regex("""\s*\(\d{1,2}:\d{2}\)"""),
-                            ""
-                        )
-                        .trim()
-                }
-                .filter { it.isNotBlank() }
-
-        return stops.any { stop ->
-            stop
-                .split("/")
-                .map { normalizeStationName(it) }
-                .any { stopName ->
-                    stopName in targetNames
-                }
-        }
-    }
-
-
-
-
-
-// ====================================================================
-// STATIONSNAMEN NORMALISIEREN
-// ====================================================================
-
-    private fun normalizeStationName(
-        value: String
-    ): String {
-
-        return value
-            .uppercase(Locale.ROOT)
-            .replace("Ä", "A")
-            .replace("Ö", "O")
-            .replace("Ü", "U")
-            .replace("À", "A")
-            .replace("È", "E")
-            .replace("É", "E")
-            .replace("Ì", "I")
-            .replace("Ò", "O")
-            .replace("Ù", "U")
-            .replace(
-                Regex("""[^A-Z0-9]+"""),
-                " "
-            )
-            .trim()
-            .replace(
-                Regex("""\s+"""),
-                " "
-            )
     }
 
     // ====================================================================
@@ -1328,7 +1189,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        val channelId = "train_delay_instant_v6"
+        // ÄNDERUNG 1: Neue ID (v7), damit Android die alten Sound-Einstellungen vergisst
+        val channelId = "train_delay_instant_v7"
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
 
         val channel = NotificationChannel(
@@ -1340,6 +1202,8 @@ class MainActivity : AppCompatActivity() {
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 200, 100, 200)
             setBypassDnd(true)
+            // ÄNDERUNG 2: Dem Benachrichtigungskanal explizit den Systemton entziehen
+            setSound(null, null)
         }
         notificationManager.createNotificationChannel(channel)
 
@@ -1350,7 +1214,9 @@ class MainActivity : AppCompatActivity() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // ÄNDERUNG 3: Kein DEFAULT_ALL mehr, stattdessen nur Vibration und Licht erlauben
+            .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+            .setSound(null)
             .setAutoCancel(true)
 
         notificationManager.notify(1001, builder.build())
@@ -1363,8 +1229,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun playSingleBeep() {
         try {
-            val toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-            toneGenerator.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 350)
+            // Spielt den Ton sofort flüssig ab
+            alarmToneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 350)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -1519,7 +1385,18 @@ class MainActivity : AppCompatActivity() {
 
                 // RFI Cross-Check Info
                 if (train.rfiStatus != null || train.rfiDelay != null) {
-                    messageBuilder.append("<br><small><font color='#999999'>RFI: ${train.rfiStatus ?: "pünktlich"} (${train.rfiDelay ?: "+0"})</font></small>")
+                    val isRfiCritical = train.rfiStatus == "Verspätung" || train.rfiStatus == "entfällt"
+                    val rfiColor = if (isRfiCritical) "#D32F2F" else "#999999"
+                    val rfiStatusText = train.rfiStatus ?: "pünktlich"
+                    val rfiDelayText = train.rfiDelay ?: "+0"
+
+                    val rfiInfo = if (isRfiCritical) {
+                        "<b>RFI: $rfiStatusText ($rfiDelayText)</b>"
+                    } else {
+                        "RFI: $rfiStatusText ($rfiDelayText)"
+                    }
+
+                    messageBuilder.append("<br><small><font color='$rfiColor'>$rfiInfo</font></small>")
                 }
 
                 if (
@@ -2066,11 +1943,6 @@ class MainActivity : AppCompatActivity() {
 
     // --- EFA Helpers ---
 
-    private fun getAsList(node: JSONObject, key: String): List<JSONObject> {
-        val array = node.optJSONArray(key) ?: return emptyList()
-        return List(array.length()) { array.getJSONObject(it) }
-    }
-
     private fun extractDate(node: JSONObject, keys: List<String>): String? {
         for (key in keys) {
             val date = node.optString(key).takeIf { it.isNotEmpty() }
@@ -2132,7 +2004,7 @@ class MainActivity : AppCompatActivity() {
     private fun calculateActualDepartureDateTime(planDate: String, planTime: String, realTime: String): LocalDateTime {
         val date = try {
             java.time.LocalDate.parse(planDate, DateTimeFormatter.ofPattern("yyyyMMdd"))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             java.time.LocalDate.now()
         }
         val pTime = parseLocalTime(planTime) ?: LocalTime.now()
@@ -2149,7 +2021,7 @@ class MainActivity : AppCompatActivity() {
     private fun parseLocalTime(timeStr: String): LocalTime? {
         return try {
             LocalTime.parse(timeStr, DateTimeFormatter.ofPattern("HH:mm"))
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
@@ -2169,7 +2041,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     "66000468"
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 "66000468"
             }
         }
