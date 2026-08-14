@@ -56,16 +56,16 @@ class MainActivity : AppCompatActivity() {
 
         val CATEGORY_GROUPS = mapOf(
             "Regionalverkehr RFI/SAD" to listOf(
-                CategoryFilter("cat_reg", "Regionalzüge(REG)", listOf("REG", "REGIONALE", "SAD"), true),
-                CategoryFilter("cat_rv", "Regionalexpress (RV)", listOf("RV", "REGIONALE VELOCE"), true),
-                CategoryFilter("cat_bus", "Bus Schienenersatz", listOf("BUS"), true)
+                CategoryFilter("cat_reg", "Regionalzüge(REG)", listOf("REG", "REGIONALE", "SAD"), defaultState = true),
+                CategoryFilter("cat_rv", "Regionalexpress (RV)", listOf("RV", "REGIONALE VELOCE"), defaultState = true),
+                CategoryFilter("cat_bus", "Bus Schienenersatz", listOf("BUS"), defaultState = true),
             ),
             "Fernverkehr & High-Speed" to listOf(
-                CategoryFilter("cat_tn_rj", "Eurocity / Railjet / Trenord (RJ/EC)", listOf("RJ", "RAILJET", "EC", "TRENORD"), false),
-                CategoryFilter("cat_fv_freccia", "Frecciarossa (Alta Velocità)", listOf("FRECCIAROSSA", "FRECCIARGENTO", "FR"), false),
-                CategoryFilter("cat_fv_italo", "Italo (Alta Velocità)", listOf("ITALO"), false),
-                CategoryFilter("cat_fv_ic", "Intercity (IC)", listOf("INTERCITY", "IC"), false)
-            )
+                CategoryFilter("cat_tn_rj", "Eurocity / Railjet / Trenord (RJ/EC)", listOf("RJ", "RAILJET", "EC", "TRENORD"), defaultState = false),
+                CategoryFilter("cat_fv_freccia", "Frecciarossa (Alta Velocità)", listOf("FRECCIAROSSA", "FRECCIARGENTO", "FR"), defaultState = false),
+                CategoryFilter("cat_fv_italo", "Italo (Alta Velocità)", listOf("ITALO"), defaultState = false),
+                CategoryFilter("cat_fv_ic", "Intercity (IC)", listOf("INTERCITY", "IC"), defaultState = false),
+            ),
         )
     }
 
@@ -150,7 +150,7 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQUEST_NOTIFICATION_PERMISSION) checkLocationPermissionAndFetch()
         else if (requestCode == REQUEST_LOCATION_PERMISSION) {
-            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) checkLocationPermissionAndFetch()
+            if (grantResults.isNotEmpty() && (grantResults[0] == PackageManager.PERMISSION_GRANTED)) checkLocationPermissionAndFetch()
             else {
                 Toast.makeText(this, getString(R.string.no_location), Toast.LENGTH_LONG).show()
                 finish()
@@ -170,7 +170,7 @@ class MainActivity : AppCompatActivity() {
         val regionalStations = allStations.filter { !it.placeId.startsWith("9900") && !it.placeId.endsWith("00") }
         val currentStation = regionalStations.minByOrNull { calculateDistance(location.latitude, location.longitude, it.lat, it.lon) } ?: homeStation
 
-        if (currentStation.name == homeStation.name || currentStation.name == workStation.name) {
+        if ((currentStation.name == homeStation.name) || (currentStation.name == workStation.name)) {
             val targetStation = if (currentStation.name == homeStation.name) workStation else homeStation
             startTrainFetch(currentStation, targetStation)
         } else {
@@ -220,15 +220,15 @@ class MainActivity : AppCompatActivity() {
                 else mb.append(getString(R.string.platform_label_format, t.platform)).append("<br>")
                 if (t.hasDelay) mb.append(getString(R.string.delay_label_critical_format, t.delay))
                 else mb.append(getString(R.string.delay_label_format, t.delay))
-                if (t.rfiStatus != null || t.rfiDelay != null) {
-                    val isRfiCritical = t.rfiStatus == "Verspätung" || t.rfiStatus == "entfällt"
+                if ((t.rfiStatus != null) || (t.rfiDelay != null)) {
+                    val isRfiCritical = (t.rfiStatus == "Verspätung") || (t.rfiStatus == "entfällt")
                     val rfiColor = if (isRfiCritical) "#D32F2F" else "#999999"
                     val rfiStatusText = t.rfiStatus ?: "pünktlich"
                     val rfiDelayText = t.rfiDelay ?: "+0"
                     val rfiInfo = if (isRfiCritical) "<b>RFI: $rfiStatusText ($rfiDelayText)</b>" else "RFI: $rfiStatusText ($rfiDelayText)"
                     mb.append("<br><small><font color='$rfiColor'>$rfiInfo</font></small>")
                 }
-                if (i < trains.size - 1) mb.append("<br>-----------------------------------<br>")
+                if (i < (trains.size - 1)) mb.append("<br>-----------------------------------<br>")
             }
         }
 
@@ -284,10 +284,16 @@ class MainActivity : AppCompatActivity() {
             val cb = CheckBox(this).apply { text = label; isChecked = enabled }
             val btnTime = Button(this).apply { text = String.format(java.util.Locale.ROOT, "%02d:%02d", h, m); isEnabled = enabled }
             btnTime.setOnClickListener {
-                TimePickerDialog(this, { _, hour, min ->
-                    btnTime.text = String.format(java.util.Locale.ROOT, "%02d:%02d", hour, min)
-                    prefs.edit { putInt("timer_${index}_hour", hour); putInt("timer_${index}_minute", min) }
-                }, prefs.getInt("timer_${index}_hour", h), prefs.getInt("timer_${index}_minute", m), true).show()
+                TimePickerDialog(
+                    this,
+                    { _, hour, min ->
+                        btnTime.text = String.format(java.util.Locale.ROOT, "%02d:%02d", hour, min)
+                        prefs.edit { putInt("timer_${index}_hour", hour); putInt("timer_${index}_minute", min) }
+                    },
+                    prefs.getInt("timer_${index}_hour", h),
+                    prefs.getInt("timer_${index}_minute", m),
+                    true,
+                ).show()
             }
             cb.setOnCheckedChangeListener { _, checked -> btnTime.isEnabled = checked }
             
@@ -346,8 +352,8 @@ class MainActivity : AppCompatActivity() {
             else {
                 prefs.edit {
                     putString("home_station", sHome); putString("work_station", sWork); putInt("alarm_train_count", spinnerAlarmCount.selectedItemPosition + 1)
-                    putBoolean("timer_1_enabled", timer1.first.isChecked); putStringSet("timer_1_days", timer1.second.filter { it.isChecked }.map { cb -> timer1.third[timer1.second.indexOf(cb)] }.toSet())
-                    putBoolean("timer_2_enabled", timer2.first.isChecked); putStringSet("timer_2_days", timer2.second.filter { it.isChecked }.map { cb -> timer2.third[timer2.second.indexOf(cb)] }.toSet())
+                    putBoolean("timer_1_enabled", timer1.first.isChecked); putStringSet("timer_1_days", timer1.second.asSequence().filter { it.isChecked }.map { cb -> timer1.third[timer1.second.indexOf(cb)] }.toSet())
+                    putBoolean("timer_2_enabled", timer2.first.isChecked); putStringSet("timer_2_days", timer2.second.asSequence().filter { it.isChecked }.map { cb -> timer2.third[timer2.second.indexOf(cb)] }.toSet())
                     checkboxMap.forEach { (k, cb) -> putBoolean(k, cb.isChecked) }
                 }
                 ScheduleHelper.scheduleAlarm(this@MainActivity, 1); ScheduleHelper.scheduleAlarm(this@MainActivity, 2)
@@ -361,7 +367,7 @@ class MainActivity : AppCompatActivity() {
         return allStations.firstOrNull { it.name == name } ?: allStations.first { it.name == default }
     }
 
-    private fun getSelectableRegionalStations() = allStations.filter { !it.placeId.startsWith("9900") && !it.placeId.endsWith("00") && it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala") }.sortedBy { it.name }
+    private fun getSelectableRegionalStations() = allStations.asSequence().filter { (!it.placeId.startsWith("9900")) && (!it.placeId.endsWith("00")) && (it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala")) }.sortedBy { it.name }.toList()
 
     private fun isNetworkAvailable(): Boolean {
         val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -384,7 +390,7 @@ class MainActivity : AppCompatActivity() {
                         s.optString("efaId").takeIf { it.isNotEmpty() },
                         s.getDouble("lat"),
                         s.getDouble("lon"),
-                        List(a.length()) { a.getString(it) }
+                        List(a.length()) { a.getString(it) },
                     )
                 }
             }

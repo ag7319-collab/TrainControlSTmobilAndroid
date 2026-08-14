@@ -25,12 +25,12 @@ class NotificationHelper(private val context: Context) {
 
     fun sendGarminNotification(
         message: String,
-        title: String = "Zug-Anzeige"
+        title: String = "Zug-Anzeige",
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(
                     context,
-                    Manifest.permission.POST_NOTIFICATIONS
+                    Manifest.permission.POST_NOTIFICATIONS,
                 ) != PackageManager.PERMISSION_GRANTED
             ) {
                 android.util.Log.w("TrainControlSTmobil", "POST_NOTIFICATIONS nicht erlaubt")

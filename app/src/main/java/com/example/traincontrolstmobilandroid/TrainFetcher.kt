@@ -13,13 +13,13 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 
-class TrainFetcher(private val context: Context) {
+class TrainFetcher(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences("TrainControlSTmobilPrefs", Context.MODE_PRIVATE)
 
     suspend fun fetchAndParseTrains(
         fromStation: StationData,
-        targetStation: StationData
+        targetStation: StationData,
     ): List<TrainInfo> {
         val rawTrainList = mutableListOf<TrainInfo>()
         val limit = 10
@@ -91,7 +91,7 @@ class TrainFetcher(private val context: Context) {
                         for (legObj in legs) {
                             val transp = legObj.optJSONObject("transportation") ?: legObj.optJSONObject("mode")
                             val tName = transp?.optString("name") ?: ""
-                            val isWalk = tName.contains("Fußweg", true) || legObj.optBoolean("isWalk", false)
+                            val isWalk = tName.contains("Fußweg", ignoreCase = true) || legObj.optBoolean("isWalk", false)
                             if (isWalk) continue
 
                             val upper = tName.uppercase()
@@ -115,7 +115,7 @@ class TrainFetcher(private val context: Context) {
                         val vehicleLegs = legs.filter { leg ->
                             val legTransp = leg.optJSONObject("transportation") ?: leg.optJSONObject("mode")
                             val legName = legTransp?.optString("name") ?: ""
-                            val isWalk = legName.contains("Fußweg", true) || leg.optBoolean("isWalk", false)
+                            val isWalk = legName.contains("Fußweg", ignoreCase = true) || leg.optBoolean("isWalk", false)
                             !isWalk
                         }
 
@@ -126,8 +126,8 @@ class TrainFetcher(private val context: Context) {
                         val tripDestName = tripDestNode?.optString("name") ?: ""
 
                         val cleanTarget = targetStation.name.split("/").first().trim()
-                        val matchesTargetName = tripDestName.contains(cleanTarget, true) ||
-                                targetStation.name.contains(tripDestName.split("/").first().trim(), true)
+                        val matchesTargetName = tripDestName.contains(cleanTarget, ignoreCase = true) ||
+                                targetStation.name.contains(tripDestName.split("/").first().trim(), ignoreCase = true)
 
                         if (!matchesTargetName) {
                              // Check ID match as fallback
@@ -143,7 +143,7 @@ class TrainFetcher(private val context: Context) {
                         val originNode = mainLeg.optJSONObject("origin") ?: points.firstOrNull { it.optString("usage") == "departure" } ?: points.firstOrNull()
                         val transpNode = mainLeg.optJSONObject("transportation") ?: mainLeg.optJSONObject("mode")
 
-                        if (originNode == null || transpNode == null) continue
+                        if ((originNode == null) || (transpNode == null)) continue
 
                         val transpName = transpNode.optString("name").takeIf { it.isNotEmpty() }
                             ?: transpNode.optString("disassembledName").takeIf { it.isNotEmpty() } ?: "Zug"
@@ -165,7 +165,7 @@ class TrainFetcher(private val context: Context) {
                         if (!actualDeparture.isAfter(now.minusMinutes(1))) continue
                         if (actualDeparture.isAfter(now.plusHours(5))) continue
 
-                        if (rawTrainList.any { it.categoryNumber == transpName && it.time == planTime }) continue
+                        if (rawTrainList.any { (it.categoryNumber == transpName) && (it.time == planTime) }) continue
 
                         val trainInfo = TrainInfo(
                             categoryNumber = transpName,
@@ -176,7 +176,7 @@ class TrainFetcher(private val context: Context) {
                             hasDelay = false,
                             isBus = isBus,
                             stopsAtTarget = true,
-                            lineTerminal = lineTerminal
+                            lineTerminal = lineTerminal,
                         )
 
                         val idx = rawTrainList.size
@@ -185,10 +185,10 @@ class TrainFetcher(private val context: Context) {
                         if (realTime != planTime) {
                             val plannedLocalTime = parseLocalTime(planTime)
                             val actualLocalTime = parseLocalTime(realTime)
-                            if (plannedLocalTime != null && actualLocalTime != null) {
-                                val pTotal = plannedLocalTime.hour * 60 + plannedLocalTime.minute
-                                var rTotal = actualLocalTime.hour * 60 + actualLocalTime.minute
-                                if (rTotal < pTotal && (pTotal - rTotal) > 720) rTotal += 1440
+                            if ((plannedLocalTime != null) && (actualLocalTime != null)) {
+                                val pTotal = (plannedLocalTime.hour * 60) + plannedLocalTime.minute
+                                var rTotal = (actualLocalTime.hour * 60) + actualLocalTime.minute
+                                if ((rTotal < pTotal) && ((pTotal - rTotal) > 720)) rTotal += 1440
                                 val delayMins = rTotal - pTotal
                                 if (delayMins > 0) {
                                     rawTrainList[idx] = rawTrainList[idx].copy(delay = "+$delayMins Min.", hasDelay = true)
@@ -196,7 +196,7 @@ class TrainFetcher(private val context: Context) {
                             }
                         }
 
-                        val isCancelled = originNode.optString("isCancelled") == "1" || originNode.optBoolean("isCancelled", false)
+                        val isCancelled = (originNode.optString("isCancelled") == "1") || originNode.optBoolean("isCancelled", false)
                         if (isCancelled) {
                             rawTrainList[idx] = rawTrainList[idx].copy(delay = "entfällt", hasDelay = true)
                         }
@@ -229,9 +229,9 @@ class TrainFetcher(private val context: Context) {
                                     val colTexts = cols.map { it.text().trim() }
                                     val timeIdx = colTexts.indexOfFirst { timeRegex.containsMatchIn(it) }
 
-                                    if (timeIdx != -1 && colTexts.size > timeIdx + 1) {
+                                    if ((timeIdx != -1) && (colTexts.size > (timeIdx + 1))) {
                                         val rawDelay = colTexts[timeIdx + 1]
-                                        val isCancelled = rawDelay.contains("SOP", true) || rawDelay.contains("CANC", true) || matchedRow.text().contains("SOPPRESSO", true)
+                                        val isCancelled = rawDelay.contains("SOP", ignoreCase = true) || rawDelay.contains("CANC", ignoreCase = true) || matchedRow.text().contains("SOPPRESSO", ignoreCase = true)
 
                                         val statusText = when {
                                             isCancelled -> "entfällt"
@@ -269,34 +269,28 @@ class TrainFetcher(private val context: Context) {
 
     private fun extractDate(node: JSONObject, keys: List<String>): String? {
         for (key in keys) {
-            val date = node.optString(key).takeIf { it.isNotEmpty() }
-            if (date != null) return date
+            node.optString(key).takeIf { it.isNotEmpty() }?.let { return it }
         }
         val dateTime = node.optJSONObject("dateTime")
-        if (dateTime != null) {
-            return dateTime.optString("date").takeIf { it.isNotEmpty() }
-        }
-        return null
+        return dateTime?.optString("date")?.takeIf { it.isNotEmpty() }
     }
 
     private fun extractTime(node: JSONObject, keys: List<String>): String? {
         for (key in keys) {
             val element = node.opt(key)
-            val time = parseTimeFromElement(element, key.contains("RT", true) || key.contains("Estimated", true))
-            if (time != null) return time
+            parseTimeFromElement(element, key.contains("RT", ignoreCase = true) || key.contains("Estimated", ignoreCase = true))?.let { return it }
         }
         val dateTime = node.optJSONObject("dateTime")
         if (dateTime != null) {
-            val isRT = keys.any { it.contains("RT", true) || it.contains("Estimated", true) }
+            val isRT = keys.any { it.contains("RT", ignoreCase = true) || it.contains("Estimated", ignoreCase = true) }
             val t = if (isRT) {
                 dateTime.optString("rtTime").takeIf { it.isNotEmpty() }
                     ?: dateTime.optString("time").takeIf { it.isNotEmpty() }
             } else {
                 dateTime.optString("time").takeIf { it.isNotEmpty() }
             }
-            if (t != null) {
-                val match = Regex("""\b(\d{2}:\d{2})\b""").find(t)
-                if (match != null) return match.value
+            t?.let { timeStr ->
+                Regex("""\b(\d{2}:\d{2})\b""").find(timeStr)?.value?.let { return it }
             }
         }
         return null
@@ -314,13 +308,11 @@ class TrainFetcher(private val context: Context) {
             } else {
                 element.optString("time").takeIf { it.isNotEmpty() }
             }
-            if (t != null) {
-                val match = Regex("""\b(\d{2}:\d{2})\b""").find(t)
-                if (match != null) return match.value
+            t?.let { timeStr ->
+                Regex("""\b(\d{2}:\d{2})\b""").find(timeStr)?.value?.let { return it }
             }
         } else if (element is String) {
-            val match = Regex("""\b(\d{2}:\d{2})\b""").find(element)
-            if (match != null) return match.value
+            Regex("""\b(\d{2}:\d{2})\b""").find(element)?.value?.let { return it }
         }
         return null
     }

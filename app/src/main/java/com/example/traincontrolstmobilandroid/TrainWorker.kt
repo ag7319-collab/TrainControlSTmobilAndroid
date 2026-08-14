@@ -42,12 +42,12 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             notificationHelper.playSingleBeep()
             notificationHelper.sendGarminNotification(
                 message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}",
-                title = "⚠️ Zugverspätung"
+                title = "⚠️ Zugverspätung",
             )
         } else if (trains.isEmpty()) {
             notificationHelper.sendGarminNotification(
                 message = applicationContext.getString(R.string.no_departures),
-                title = "Zug-Anzeige"
+                title = "Zug-Anzeige",
             )
         }
 
@@ -68,11 +68,11 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                         efaId = s.optString("efaId").takeIf { it.isNotEmpty() },
                         lat = s.getDouble("lat"),
                         lon = s.getDouble("lon"),
-                        aliases = List(aliases.length()) { aliases.getString(it) }
+                        aliases = List(aliases.length()) { aliases.getString(it) },
                     )
                 }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
