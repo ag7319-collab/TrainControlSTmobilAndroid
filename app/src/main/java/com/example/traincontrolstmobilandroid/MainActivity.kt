@@ -191,7 +191,7 @@ class MainActivity : AppCompatActivity() {
 
             if (delayedTrain != null) {
                 notificationHelper.playSingleBeep()
-                if (isScreenLocked) notificationHelper.sendGarminNotification("Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}", "⚠️ Zugverspätung")
+                if (isScreenLocked) notificationHelper.sendGarminNotification("Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}", "⚠️ Zugverspätung")
             } else if (trains.isEmpty() && isScreenLocked) {
                 notificationHelper.sendGarminNotification(getString(R.string.no_departures), "Zug-Anzeige")
             }
@@ -209,8 +209,13 @@ class MainActivity : AppCompatActivity() {
         else {
             val shortTarget = targetStation.name.split("/").first().trim()
             trains.forEachIndexed { i, t ->
-                mb.append(getString(R.string.train_item_header, i + 1, t.categoryNumber)).append("<br>")
-                mb.append("${t.destination}<br>").append(getString(R.string.departure_time_format, t.time)).append("<br>")
+                val terminal = (t.lineTerminal ?: t.destination).split("/").first().trim()
+                val cleanCat = t.categoryNumber.replace("Regionalzug", "", ignoreCase = true).trim()
+                
+                mb.append(getString(R.string.train_item_header, i + 1, cleanCat)).append("<br>")
+                mb.append(getString(R.string.train_type_to_label, getTrainTypeLabel(t.categoryNumber))).append("<br>")
+                mb.append("<b>$terminal</b><br>")
+                mb.append(getString(R.string.departure_time_format, t.time)).append("<br>")
                 when (t.stopsAtTarget) {
                     true -> mb.append(getString(R.string.stops_true_format, shortTarget)).append("<br>")
                     false -> mb.append(getString(R.string.stops_false_format, shortTarget)).append("<br>")
@@ -401,6 +406,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
         val res = FloatArray(1); Location.distanceBetween(lat1, lon1, lat2, lon2, res); return res[0]
+    }
+
+    private fun getTrainTypeLabel(cat: String): String {
+        val upper = cat.uppercase()
+        return when {
+            upper.contains("BUS") -> "Schienenersatzverkehr"
+            upper.startsWith("R ") || upper.startsWith("REG") || upper.startsWith("RV") -> "Regionalzug"
+            upper.startsWith("EC") || upper.startsWith("RJ") || upper.contains("RAILJET") || upper.contains("TRENORD") -> "Fernzug"
+            upper.contains("FRECCIA") || upper.contains("ITALO") -> "High-Speed"
+            else -> "Zug"
+        }
     }
 
     @SuppressLint("SetTextI18n")

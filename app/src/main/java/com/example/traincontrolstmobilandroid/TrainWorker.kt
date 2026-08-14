@@ -41,7 +41,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         if (delayedTrain != null) {
             notificationHelper.playSingleBeep()
             notificationHelper.sendGarminNotification(
-                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}",
+                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}",
                 title = "⚠️ Zugverspätung",
             )
         } else if (trains.isEmpty()) {

@@ -19,7 +19,8 @@
     <string name="cancel_button">Abbrechen</string>
     <string name="departure_station_label">Abfahrtsbahnhof:</string>
     <string name="departure_station_format">Abfahrtsbahnhof: %1$s</string>
-    <string name="train_item_header"><b>%1$d. Train n. %2$s to:</b></string>
+    <string name="train_item_header"><b>%1$d. %2$s</b></string>
+    <string name="train_type_to_label">%1$s to:</string>
     <string name="departure_time_format">Abfahrt: %1$s Uhr</string>
     <string name="stops_true_format">Halt: &lt;font color=\'#2E7D32\'&gt;&lt;b&gt;✓ Hält in %1$s&lt;/b&gt;&lt;/font&gt;</string>
     <string name="stops_false_format">Halt: &lt;font color=\'#D32F2F\'&gt;&lt;b&gt;⚠️ Hält NICHT in %1$s!&lt;/b&gt;&lt;/font&gt;</string>
