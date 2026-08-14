@@ -1,57 +1,604 @@
 {
   "schemaVersion": 1,
   "stations": [
-    {"name":"Wien Hbf","placeId":"99003","efaId":"66007175","lat":48.1851,"lon":16.3764,"aliases":["WIEN","VIENNA"]},
-    {"name":"München Hbf","placeId":"99001","efaId":"66007086","lat":48.1402,"lon":11.5583,"aliases":["MUENCHEN","MUNICH","MUNCHEN"]},
-    {"name":"Salzburg Hbf","placeId":"99004","efaId":"66007171","lat":47.8129,"lon":13.0456,"aliases":["SALZBURG"]},
-    {"name":"Innsbruck Hbf","placeId":"99002","efaId":"66007022","lat":47.2631,"lon":11.4010,"aliases":["INNSBRUCK"]},
-    {"name":"Graz Hbf","placeId":"99005","efaId":"66007173","lat":47.0718,"lon":15.4175,"aliases":["GRAZ"]},
-    {"name":"Brenner / Brennero","placeId":"732","efaId":"66001389","lat":47.0062,"lon":11.5058,"aliases":["BRENNERO","BRENNER"]},
-    {"name":"Gossensaß / Colle Isarco","placeId":"1141","efaId":"66001385","lat":46.9328,"lon":11.4442,"aliases":["GOSSENSASS","COLLE ISARCO"]},
-    {"name":"Sterzing / Vipiteno","placeId":"3113","efaId":"66001393","lat":46.8978,"lon":11.4372,"aliases":["VIPITENO","STERZING","VIPITENO V. VIZ."]},
-    {"name":"Freienfeld / Campo di Trens","placeId":"826","efaId":"66001492","lat":46.8772,"lon":11.4828,"aliases":["CAMPO DI TRENS","FREIENFELD"]},
-    {"name":"Mühlbach / Rio di Pusteria","placeId":"2359","efaId":"66001177","lat":46.8042,"lon":11.6669,"aliases":["RIO DI PUSTERIA","MÜHLBACH","MUEHLBACH"]},
-    {"name":"Bruneck / Brunico","placeId":"751","efaId":"66001194","lat":46.7967,"lon":11.9347,"aliases":["BRUNICO","BRUNECK"]},
-    {"name":"Franzensfeste / Fortezza","placeId":"1356","efaId":"66001170","lat":46.7869,"lon":11.6094,"aliases":["FORTEZZA","FRANZENFESTE"]},
-    {"name":"Ehrenburg / Casteldarne","placeId":"981","efaId":"66002235","lat":46.7864,"lon":11.8986,"aliases":["CASTELDARNE","EHRENBURG"]},
-    {"name":"Olang / Valdaora","placeId":"2970","efaId":"66001899","lat":46.7619,"lon":12.0306,"aliases":["VALDAORA","OLANG"]},
-    {"name":"Welsberg / Monguelfo","placeId":"1773","efaId":"66001922","lat":46.7572,"lon":12.1042,"aliases":["MONGUELFO","WELSBERG"]},
-    {"name":"Innichen / San Candido","placeId":"2475","efaId":"66000392","lat":46.7325,"lon":12.2831,"aliases":["S.CANDIDO","SAN CANDIDO","INNICHEN"]},
-    {"name":"Toblach / Dobbiaco","placeId":"1247","efaId":"66000403","lat":46.7233,"lon":12.2217,"aliases":["DOBBIACO","TOBLACH"]},
-    {"name":"Brixen / Bressanone","placeId":"738","efaId":"66000998","lat":46.7150,"lon":11.6560,"aliases":["BRESSANONE","BRIXEN"]},
-    {"name":"Mals / Malles","placeId":"000","efaId":"66000213","lat":46.6872,"lon":10.5558,"aliases":["MALLES","MALS"]},
-    {"name":"Meran / Merano","placeId":"1693","efaId":"66000210","lat":46.6712,"lon":11.1511,"aliases":["MERANO","MERAN"]},
-    {"name":"Meran Untermais / Merano Maia Bassa","placeId":"1694","efaId":"66000301","lat":46.65635,"lon":11.14817,"aliases":["MERAN UNTERMAIS","MERANO MAIA BASSA"]},
-    {"name":"Klausen / Chiusa","placeId":"1101","efaId":"66001051","lat":46.6412,"lon":11.5678,"aliases":["CHIUSA","KLAUSEN"]},
-    {"name":"Lana / Burgstall – Lana / Postal","placeId":"1529","efaId":"66002294","lat":46.6139,"lon":11.1398,"aliases":["LANA-POSTAL","LANA POSTAL","LANA-BURGSTALL","LANA BURGSTALL"]},
-    {"name":"Schlanders / Silandro","placeId":"000","efaId":"66000222","lat":46.6267,"lon":10.7711,"aliases":["SILANDRO","SCHLANDERS"]},
-    {"name":"Waidbruck / Ponte Gardena","placeId":"2216","efaId":"66001092","lat":46.5989,"lon":11.5303,"aliases":["PONTE GARDENA","WAIDBRUCK","PONTE G.-LAION"]},
-    {"name":"Gargazon / Gargazzone","placeId":"3504","efaId":"66002421","lat":46.5828,"lon":11.2064,"aliases":["GARGAZZONE","GARGAZON"]},
-    {"name":"Vilpian / Nals – Vilpiano / Nalles","placeId":"3111","efaId":"66002424","lat":46.55424,"lon":11.22039,"aliases":["VILPIAN","NALS","VILPIANO-NALLES","VILPIAN-NALS"]},
-    {"name":"Terlan / Terlano-Andriano","placeId":"2828","efaId":"66000454","lat":46.5333,"lon":11.2483,"aliases":["TERLAN","TERLANO","TERLANO-ANDRIANO","TERLAN-ANDRIAN"]},
-    {"name":"Settequerce / Siebeneich","placeId":"2718","efaId":"66000458","lat":46.50870,"lon":11.26530,"aliases":["SETTEQUERCE","SIEBENEICH"]},
-    {"name":"Bozen / Bolzano","placeId":"685","efaId":"66000468","lat":46.4983,"lon":11.3548,"aliases":["BOLZANO","BOZEN"]},
-    {"name":"Ponte d'Adige / Sigmundskron","placeId":"2212","efaId":"66000811","lat":46.48571,"lon":11.29783,"aliases":["PONTE D'ADIGE","PONTE D ADIGE","SIGMUNDSKRON"]},
-    {"name":"Bozen Casanova / Kaiserau","placeId":"1966","efaId":"66002132","lat":46.47998,"lon":11.31542,"aliases":["BOLZANO CASANOVA","BZ CASANOVA","BOZEN KAISERAU","CASANOVA","KAISERAU"]},
-    {"name":"Bozen Süd / Bolzano Sud","placeId":"687","efaId":"66002210","lat":46.47352,"lon":11.32644,"aliases":["BOLZANO SUD","BOZEN SÜD","BOZEN SUD"]},
-    {"name":"Leifers / Laives","placeId":"1525","efaId":"66002444","lat":46.4253,"lon":11.3325,"aliases":["LAIVES","LEIFERS"]},
-    {"name":"Branzoll / Bronzolo","placeId":"747","efaId":"66002460","lat":46.4022,"lon":11.3125,"aliases":["BRONZOLO","BRANZOLL"]},
-    {"name":"Auer / Ora","placeId":"1943","efaId":"66000647","lat":46.3539,"lon":11.2917,"aliases":["ORA","AUER"]},
-    {"name":"Neumarkt / Egna","placeId":"1268","efaId":"66000696","lat":46.3117,"lon":11.2642,"aliases":["EGNA","NEUMARKT"]},
-    {"name":"Margreid-Kurtatsch / Magrè-Cortaccia","placeId":"1623","efaId":"66000679","lat":46.2881,"lon":11.2324,"aliases":["MAGRE'-CORTACCIA","MAGRÈ-CORTACCIA","MAGRE CORTACCIA","MARGREID-KURTATSCH","MARGREID","KURTATSCH"]},
-    {"name":"Salurn / Salorno","placeId":"2622","efaId":"66000663","lat":46.2408,"lon":11.2064,"aliases":["SALORNO","SALURN"]},
-    {"name":"Mezzocorona","placeId":"1706","efaId":"66007001","lat":46.2164,"lon":11.1197,"aliases":["MEZZOCORONA"]},
-    {"name":"Trient / Trento","placeId":"2912","efaId":"66000662","lat":46.0678,"lon":11.1211,"aliases":["TRENTO","TRIENT"]},
-    {"name":"Rovereto","placeId":"2440","efaId":"66007002","lat":45.8906,"lon":11.0336,"aliases":["ROVERETO"]},
-    {"name":"Ala","placeId":"389","efaId":"66007005","lat":45.7578,"lon":11.0028,"aliases":["ALA"]},
-    {"name":"Milano Centrale","placeId":"1728","efaId":"66007030","lat":45.4858,"lon":9.2045,"aliases":["MILANO","MAILAND","MILANO CENTRALE"]},
-    {"name":"Venezia Santa Lucia","placeId":"3009","efaId":"66007012","lat":45.4411,"lon":12.3211,"aliases":["VENEZIA","VENEDIG","VENEZIA S.LUCIA"]},
-    {"name":"Verona Porta Nuova","placeId":"3025","efaId":"66007010","lat":45.4285,"lon":10.9825,"aliases":["VERONA","VERONA P.NUOVA","VERONA PORTA NUOVA"]},
-    {"name":"Bologna Centrale","placeId":"683","efaId":"66007011","lat":44.5058,"lon":11.3431,"aliases":["BOLOGNA","BOLOGNA C.LE","BOLOGNA CENTRALE"]},
-    {"name":"Firenze S.M.N.","placeId":"1325","efaId":"66007026","lat":43.7764,"lon":11.2478,"aliases":["FIRENZE","FLORENZ","FIRENZE SMN"]},
-    {"name":"Ancona","placeId":"429","efaId":"66007071","lat":43.6167,"lon":13.5167,"aliases":["ANCONA"]},
-    {"name":"Bari Centrale","placeId":"595","efaId":"66008023","lat":41.1171,"lon":16.8719,"aliases":["BARI","BARI CENTRALE"]},
-    {"name":"Roma Termini","placeId":"2416","efaId":"66007194","lat":41.9010,"lon":12.5018,"aliases":["ROMA","ROMA TERMINI"]},
-    {"name":"Napoli Centrale","placeId":"1888","efaId":"66007197","lat":40.8528,"lon":14.2722,"aliases":["NAPOLI","NEAPEL","NAPOLI CENTRALE"]}
+    {
+      "name": "Wien Hbf",
+      "placeId": "99003",
+      "efaId": "66007175",
+      "lat": 48.1851,
+      "lon": 16.3764,
+      "aliases": [
+        "WIEN",
+        "VIENNA"
+      ]
+    },
+    {
+      "name": "München Hbf",
+      "placeId": "99001",
+      "efaId": "66007086",
+      "lat": 48.1402,
+      "lon": 11.5583,
+      "aliases": [
+        "MUENCHEN",
+        "MUNICH",
+        "MUNCHEN"
+      ]
+    },
+    {
+      "name": "Salzburg Hbf",
+      "placeId": "99004",
+      "efaId": "66007171",
+      "lat": 47.8129,
+      "lon": 13.0456,
+      "aliases": [
+        "SALZBURG"
+      ]
+    },
+    {
+      "name": "Innsbruck Hbf",
+      "placeId": "99002",
+      "efaId": "66007022",
+      "lat": 47.2631,
+      "lon": 11.401,
+      "aliases": [
+        "INNSBRUCK"
+      ]
+    },
+    {
+      "name": "Graz Hbf",
+      "placeId": "99005",
+      "efaId": "66007173",
+      "lat": 47.0718,
+      "lon": 15.4175,
+      "aliases": [
+        "GRAZ"
+      ]
+    },
+    {
+      "name": "Brenner / Brennero",
+      "placeId": "732",
+      "efaId": "66001389",
+      "lat": 47.0062,
+      "lon": 11.5058,
+      "aliases": [
+        "BRENNERO",
+        "BRENNER"
+      ]
+    },
+    {
+      "name": "Gossensaß / Colle Isarco",
+      "placeId": "1141",
+      "efaId": "66001385",
+      "lat": 46.9328,
+      "lon": 11.4442,
+      "aliases": [
+        "GOSSENSASS",
+        "COLLE ISARCO"
+      ]
+    },
+    {
+      "name": "Sterzing / Vipiteno",
+      "placeId": "3113",
+      "efaId": "66001393",
+      "lat": 46.8978,
+      "lon": 11.4372,
+      "aliases": [
+        "VIPITENO",
+        "STERZING",
+        "VIPITENO V. VIZ."
+      ]
+    },
+    {
+      "name": "Freienfeld / Campo di Trens",
+      "placeId": "826",
+      "efaId": "66001492",
+      "lat": 46.8772,
+      "lon": 11.4828,
+      "aliases": [
+        "CAMPO DI TRENS",
+        "FREIENFELD"
+      ]
+    },
+    {
+      "name": "Mühlbach / Rio di Pusteria",
+      "placeId": "2359",
+      "efaId": "66001177",
+      "lat": 46.8042,
+      "lon": 11.6669,
+      "aliases": [
+        "RIO DI PUSTERIA",
+        "MÜHLBACH",
+        "MUEHLBACH"
+      ]
+    },
+    {
+      "name": "Bruneck / Brunico",
+      "placeId": "751",
+      "efaId": "66001194",
+      "lat": 46.7967,
+      "lon": 11.9347,
+      "aliases": [
+        "BRUNICO",
+        "BRUNECK"
+      ]
+    },
+    {
+      "name": "Franzensfeste / Fortezza",
+      "placeId": "1356",
+      "efaId": "66001170",
+      "lat": 46.7869,
+      "lon": 11.6094,
+      "aliases": [
+        "FORTEZZA",
+        "FRANZENFESTE"
+      ]
+    },
+    {
+      "name": "Ehrenburg / Casteldarne",
+      "placeId": "981",
+      "efaId": "66002235",
+      "lat": 46.7864,
+      "lon": 11.8986,
+      "aliases": [
+        "CASTELDARNE",
+        "EHRENBURG"
+      ]
+    },
+    {
+      "name": "Olang / Valdaora",
+      "placeId": "2970",
+      "efaId": "66001899",
+      "lat": 46.7619,
+      "lon": 12.0306,
+      "aliases": [
+        "VALDAORA",
+        "OLANG"
+      ]
+    },
+    {
+      "name": "Welsberg / Monguelfo",
+      "placeId": "1773",
+      "efaId": "66001922",
+      "lat": 46.7572,
+      "lon": 12.1042,
+      "aliases": [
+        "MONGUELFO",
+        "WELSBERG"
+      ]
+    },
+    {
+      "name": "Innichen / San Candido",
+      "placeId": "2475",
+      "efaId": "66000392",
+      "lat": 46.7325,
+      "lon": 12.2831,
+      "aliases": [
+        "S.CANDIDO",
+        "SAN CANDIDO",
+        "INNICHEN"
+      ]
+    },
+    {
+      "name": "Toblach / Dobbiaco",
+      "placeId": "1247",
+      "efaId": "66000403",
+      "lat": 46.7233,
+      "lon": 12.2217,
+      "aliases": [
+        "DOBBIACO",
+        "TOBLACH"
+      ]
+    },
+    {
+      "name": "Brixen / Bressanone",
+      "placeId": "738",
+      "efaId": "66000998",
+      "lat": 46.715,
+      "lon": 11.656,
+      "aliases": [
+        "BRESSANONE",
+        "BRIXEN"
+      ]
+    },
+    {
+      "name": "Mals / Malles",
+      "placeId": "000",
+      "efaId": "66000213",
+      "lat": 46.6872,
+      "lon": 10.5558,
+      "aliases": [
+        "MALLES",
+        "MALS"
+      ]
+    },
+    {
+      "name": "Meran / Merano",
+      "placeId": "1693",
+      "efaId": "66000210",
+      "lat": 46.6712,
+      "lon": 11.1511,
+      "aliases": [
+        "MERANO",
+        "MERAN"
+      ]
+    },
+    {
+      "name": "Meran Untermais / Merano Maia Bassa",
+      "placeId": "1694",
+      "efaId": "66000301",
+      "lat": 46.65635,
+      "lon": 11.14817,
+      "aliases": [
+        "MERAN UNTERMAIS",
+        "MERANO MAIA BASSA",
+        "MERANO MAIA",
+        "MERAN-UNTERMAIS"
+      ]
+    },
+    {
+      "name": "Klausen / Chiusa",
+      "placeId": "1101",
+      "efaId": "66001051",
+      "lat": 46.6412,
+      "lon": 11.5678,
+      "aliases": [
+        "CHIUSA",
+        "KLAUSEN"
+      ]
+    },
+    {
+      "name": "Lana / Burgstall – Lana / Postal",
+      "placeId": "1529",
+      "efaId": "66002294",
+      "lat": 46.6139,
+      "lon": 11.1398,
+      "aliases": [
+        "LANA-POSTAL",
+        "LANA POSTAL",
+        "LANA-BURGSTALL",
+        "LANA BURGSTALL",
+        "LANA / BURGSTALL",
+        "LANA / POSTAL"
+      ]
+    },
+    {
+      "name": "Schlanders / Silandro",
+      "placeId": "000",
+      "efaId": "66000222",
+      "lat": 46.6267,
+      "lon": 10.7711,
+      "aliases": [
+        "SILANDRO",
+        "SCHLANDERS"
+      ]
+    },
+    {
+      "name": "Waidbruck / Ponte Gardena",
+      "placeId": "2216",
+      "efaId": "66001092",
+      "lat": 46.5989,
+      "lon": 11.5303,
+      "aliases": [
+        "PONTE GARDENA",
+        "WAIDBRUCK",
+        "PONTE G.-LAION"
+      ]
+    },
+    {
+      "name": "Gargazon / Gargazzone",
+      "placeId": "3504",
+      "efaId": "66002421",
+      "lat": 46.5828,
+      "lon": 11.2064,
+      "aliases": [
+        "GARGAZZONE",
+        "GARGAZON"
+      ]
+    },
+    {
+      "name": "Vilpian / Nals – Vilpiano / Nalles",
+      "placeId": "3111",
+      "efaId": "66002424",
+      "lat": 46.55424,
+      "lon": 11.22039,
+      "aliases": [
+        "VILPIAN",
+        "NALS",
+        "VILPIANO-NALLES",
+        "VILPIAN-NALS",
+        "VILPIAN / NALS",
+        "VILPIANO / NALLES"
+      ]
+    },
+    {
+      "name": "Terlan / Terlano",
+      "placeId": "2828",
+      "efaId": "66000454",
+      "lat": 46.5333,
+      "lon": 11.2483,
+      "aliases": [
+        "TERLAN",
+        "TERLANO",
+        "TERLANO-ANDRIANO",
+        "TERLAN-ANDRIAN",
+        "TERLAN / TERLANO"
+      ]
+    },
+    {
+      "name": "Settequerce / Siebeneich",
+      "placeId": "2718",
+      "efaId": "66000458",
+      "lat": 46.5087,
+      "lon": 11.2653,
+      "aliases": [
+        "SETTEQUERCE",
+        "SIEBENEICH"
+      ]
+    },
+    {
+      "name": "Bozen / Bolzano",
+      "placeId": "685",
+      "efaId": "66000468",
+      "lat": 46.4983,
+      "lon": 11.3548,
+      "aliases": [
+        "BOLZANO",
+        "BOZEN"
+      ]
+    },
+    {
+      "name": "Sigmundskron / Ponte d'Adige",
+      "placeId": "2212",
+      "efaId": "66000811",
+      "lat": 46.48571,
+      "lon": 11.29783,
+      "aliases": [
+        "PONTE D'ADIGE",
+        "PONTE D ADIGE",
+        "SIGMUNDSKRON",
+        "SIGMUNDSKRON / PONTE D'ADIGE"
+      ]
+    },
+    {
+      "name": "Bozen Casanova / Kaiserau",
+      "placeId": "1966",
+      "efaId": "66002132",
+      "lat": 46.47998,
+      "lon": 11.31542,
+      "aliases": [
+        "BOLZANO CASANOVA",
+        "BZ CASANOVA",
+        "BOZEN KAISERAU",
+        "CASANOVA",
+        "KAISERAU"
+      ]
+    },
+    {
+      "name": "Bozen Süd / Bolzano Sud",
+      "placeId": "687",
+      "efaId": "66002210",
+      "lat": 46.47352,
+      "lon": 11.32644,
+      "aliases": [
+        "BOLZANO SUD",
+        "BOZEN SÜD",
+        "BOZEN SUD"
+      ]
+    },
+    {
+      "name": "Leifers / Laives",
+      "placeId": "1525",
+      "efaId": "66002444",
+      "lat": 46.4253,
+      "lon": 11.3325,
+      "aliases": [
+        "LAIVES",
+        "LEIFERS"
+      ]
+    },
+    {
+      "name": "Branzoll / Bronzolo",
+      "placeId": "747",
+      "efaId": "66002460",
+      "lat": 46.4022,
+      "lon": 11.3125,
+      "aliases": [
+        "BRONZOLO",
+        "BRANZOLL"
+      ]
+    },
+    {
+      "name": "Auer / Ora",
+      "placeId": "1943",
+      "efaId": "66000647",
+      "lat": 46.3539,
+      "lon": 11.2917,
+      "aliases": [
+        "ORA",
+        "AUER"
+      ]
+    },
+    {
+      "name": "Neumarkt / Egna",
+      "placeId": "1268",
+      "efaId": "66000696",
+      "lat": 46.3117,
+      "lon": 11.2642,
+      "aliases": [
+        "EGNA",
+        "NEUMARKT"
+      ]
+    },
+    {
+      "name": "Margreid-Kurtatsch / Magrè-Cortaccia",
+      "placeId": "1623",
+      "efaId": "66000679",
+      "lat": 46.2881,
+      "lon": 11.2324,
+      "aliases": [
+        "MAGRE'-CORTACCIA",
+        "MAGRÈ-CORTACCIA",
+        "MAGRE CORTACCIA",
+        "MARGREID-KURTATSCH",
+        "MARGREID",
+        "KURTATSCH"
+      ]
+    },
+    {
+      "name": "Salurn / Salorno",
+      "placeId": "2622",
+      "efaId": "66000663",
+      "lat": 46.2408,
+      "lon": 11.2064,
+      "aliases": [
+        "SALORNO",
+        "SALURN"
+      ]
+    },
+    {
+      "name": "Mezzocorona",
+      "placeId": "1706",
+      "efaId": "66007001",
+      "lat": 46.2164,
+      "lon": 11.1197,
+      "aliases": [
+        "MEZZOCORONA"
+      ]
+    },
+    {
+      "name": "Trient / Trento",
+      "placeId": "2912",
+      "efaId": "66000662",
+      "lat": 46.0678,
+      "lon": 11.1211,
+      "aliases": [
+        "TRENTO",
+        "TRIENT"
+      ]
+    },
+    {
+      "name": "Rovereto",
+      "placeId": "2440",
+      "efaId": "66007002",
+      "lat": 45.8906,
+      "lon": 11.0336,
+      "aliases": [
+        "ROVERETO"
+      ]
+    },
+    {
+      "name": "Ala",
+      "placeId": "389",
+      "efaId": "66007005",
+      "lat": 45.7578,
+      "lon": 11.0028,
+      "aliases": [
+        "ALA"
+      ]
+    },
+    {
+      "name": "Milano Centrale",
+      "placeId": "1728",
+      "efaId": "66007030",
+      "lat": 45.4858,
+      "lon": 9.2045,
+      "aliases": [
+        "MILANO",
+        "MAILAND",
+        "MILANO CENTRALE"
+      ]
+    },
+    {
+      "name": "Venezia Santa Lucia",
+      "placeId": "3009",
+      "efaId": "66007012",
+      "lat": 45.4411,
+      "lon": 12.3211,
+      "aliases": [
+        "VENEZIA",
+        "VENEDIG",
+        "VENEZIA S.LUCIA"
+      ]
+    },
+    {
+      "name": "Verona Porta Nuova",
+      "placeId": "3025",
+      "efaId": "66007010",
+      "lat": 45.4285,
+      "lon": 10.9825,
+      "aliases": [
+        "VERONA",
+        "VERONA P.NUOVA",
+        "VERONA PORTA NUOVA"
+      ]
+    },
+    {
+      "name": "Bologna Centrale",
+      "placeId": "683",
+      "efaId": "66007011",
+      "lat": 44.5058,
+      "lon": 11.3431,
+      "aliases": [
+        "BOLOGNA",
+        "BOLOGNA C.LE",
+        "BOLOGNA CENTRALE"
+      ]
+    },
+    {
+      "name": "Firenze S.M.N.",
+      "placeId": "1325",
+      "efaId": "66007026",
+      "lat": 43.7764,
+      "lon": 11.2478,
+      "aliases": [
+        "FIRENZE",
+        "FLORENZ",
+        "FIRENZE SMN"
+      ]
+    },
+    {
+      "name": "Ancona",
+      "placeId": "429",
+      "efaId": "66007071",
+      "lat": 43.6167,
+      "lon": 13.5167,
+      "aliases": [
+        "ANCONA"
+      ]
+    },
+    {
+      "name": "Bari Centrale",
+      "placeId": "595",
+      "efaId": "66008023",
+      "lat": 41.1171,
+      "lon": 16.8719,
+      "aliases": [
+        "BARI",
+        "BARI CENTRALE"
+      ]
+    },
+    {
+      "name": "Roma Termini",
+      "placeId": "2416",
+      "efaId": "66007194",
+      "lat": 41.901,
+      "lon": 12.5018,
+      "aliases": [
+        "ROMA",
+        "ROMA TERMINI"
+      ]
+    },
+    {
+      "name": "Napoli Centrale",
+      "placeId": "1888",
+      "efaId": "66007197",
+      "lat": 40.8528,
+      "lon": 14.2722,
+      "aliases": [
+        "NAPOLI",
+        "NEAPEL",
+        "NAPOLI CENTRALE"
+      ]
+    }
   ]
 }

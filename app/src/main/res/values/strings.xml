@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">TrainControl ST mobil</string>
+    <string name="app_name">TrainControlSTmobilAndroid</string>
     <string name="home_address_label">Heimadresse (Abfahrt):</string>
     <string name="work_address_label">Arbeitsadresse (Ziel):</string>
     <string name="operators_label">Betreiber &amp; Zugkategorien:</string>

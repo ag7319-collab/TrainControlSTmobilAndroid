@@ -116,12 +116,18 @@ class MainActivity : AppCompatActivity() {
             "MERAN",
             "MERANO MAIA",
             "MERAN-UNTERMAIS",
+            "LANA",
+            "BURGSTALL",
             "LANA-POSTAL",
             "LANA-BURGSTALL",
             "GARGAZZONE",
             "GARGAZON",
+            "VILPIAN",
+            "NALS",
             "VILPIANO-NALLES",
             "VILPIAN-NALS",
+            "TERLAN",
+            "TERLANO",
             "TERLANO-ANDRIANO",
             "TERLAN-ANDRIAN",
             "SETTEQUERCE",
@@ -1008,6 +1014,8 @@ class MainActivity : AppCompatActivity() {
                         }
                     } ?: continue
 
+                    android.util.Log.d("TrainFetch", "Response: $responseStr")
+
                     val root = JSONObject(responseStr)
                     val tripResponse = root.optJSONObject("tripResponse")
 
@@ -1087,6 +1095,7 @@ class MainActivity : AppCompatActivity() {
                             ?: transpNode.optString("disassembledName").takeIf { it.isNotEmpty() } ?: "Zug"
 
                         val lineTerminal = transpNode.optJSONObject("destination")?.optString("name")
+                            ?: transpNode.optString("direction").takeIf { it.isNotEmpty() }
                             ?: transpNode.optString("destination").takeIf { it.isNotEmpty() }
                             ?: targetStation.name
 
@@ -1108,7 +1117,7 @@ class MainActivity : AppCompatActivity() {
 
                         val trainInfo = TrainInfo(
                             categoryNumber = transpName,
-                            destination = if (tripDestName.isBlank()) targetStation.name else tripDestName,
+                            destination = lineTerminal,
                             time = planTime,
                             delay = "pünktlich",
                             platform = originNode.optString("platformName", "-"),
