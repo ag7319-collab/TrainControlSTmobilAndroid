@@ -18,7 +18,17 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
-import android.widget.*
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.CheckBox
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.ScrollView
+import android.widget.Spinner
+import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -164,8 +174,8 @@ class MainActivity : AppCompatActivity() {
             val targetStation = if (currentStation.name == homeStation.name) workStation else homeStation
             startTrainFetch(currentStation, targetStation)
         } else {
-            val km = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-            if (km.isKeyguardLocked) finish()
+            val km = getSystemService(KeyguardManager::class.java)
+            if (km?.isKeyguardLocked == true) finish()
             else showLocationStationDialog(currentStation, homeStation, workStation)
         }
     }
@@ -177,7 +187,7 @@ class MainActivity : AppCompatActivity() {
             val alarmTrainCount = prefs.getInt("alarm_train_count", 3)
             val delayedTrain = relevantTrains.asSequence().take(alarmTrainCount).firstOrNull { it.hasAnyDelay }
             lastExecutionTime = System.currentTimeMillis()
-            val isScreenLocked = (getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
+            val isScreenLocked = getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
 
             if (delayedTrain != null) {
                 notificationHelper.playSingleBeep()
@@ -187,7 +197,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             withContext(Dispatchers.Main) {
-                if ((getSystemService(KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked) finish()
+                if (getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true) finish()
                 else showResultPopup(currentStation, targetStation, trains)
             }
         }
@@ -264,7 +274,7 @@ class MainActivity : AppCompatActivity() {
         container.addView(spinnerAlarmCount)
 
         // Timer Section
-        container.addView(TextView(this).apply { text = getString(R.string.timer_section_title); setTypeface(null, Typeface.BOLD); setPadding(0, 40, 0, 10); textSize = 18f; setTextColor(Color.BLUE) })
+        container.addView(TextView(this).apply { text = getString(R.string.timer_section_title); setTypeface(null, Typeface.BOLD); setPadding(0, 40, 0, 10); textSize = 18f; setTextColor(Color.BLACK) })
         
         val createTimerView = { index: Int, label: String ->
             val enabled = prefs.getBoolean("timer_${index}_enabled", false)
@@ -281,14 +291,17 @@ class MainActivity : AppCompatActivity() {
             }
             cb.setOnCheckedChangeListener { _, checked -> btnTime.isEnabled = checked }
             
-            val daysLayout = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(20, 10, 0, 10) }
+            val daysLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(20, 10, 20, 10)
+            }
             val dayKeys = listOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
             val dayLabels = listOf(R.string.mon, R.string.tue, R.string.wed, R.string.thu, R.string.fri, R.string.sat, R.string.sun)
             val dayCbs = mutableListOf<CheckBox>()
             val selectedDays = prefs.getStringSet("timer_${index}_days", setOf("mon", "tue", "wed", "thu", "fri")) ?: setOf()
             
             dayKeys.forEachIndexed { i, key ->
-                val dayCb = CheckBox(this).apply { text = getString(dayLabels[i]); isChecked = key in selectedDays; setPadding(5, 0, 15, 0); isEnabled = enabled }
+                val dayCb = CheckBox(this).apply { text = getString(dayLabels[i]); isChecked = key in selectedDays; setPadding(0, 0, 10, 0); isEnabled = enabled }
                 dayCbs.add(dayCb)
                 daysLayout.addView(dayCb)
             }
@@ -297,9 +310,13 @@ class MainActivity : AppCompatActivity() {
                 dayCbs.forEach { it.isEnabled = checked }
             }
 
+            val hsvDays = HorizontalScrollView(this).apply {
+                isHorizontalScrollBarEnabled = false
+                addView(daysLayout)
+            }
             container.addView(cb)
             container.addView(btnTime)
-            container.addView(daysLayout)
+            container.addView(hsvDays, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             Triple(cb, dayCbs, dayKeys)
         }
 
@@ -325,7 +342,7 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val sHome = spinnerHome.selectedItem.toString(); val sWork = spinnerWork.selectedItem.toString()
-            if (sHome == sWork) Toast.makeText(this, getString(R.string.error_identical_addresses), Toast.LENGTH_LONG).show()
+            if (sHome == sWork) Toast.makeText(this@MainActivity, getString(R.string.error_identical_addresses), Toast.LENGTH_LONG).show()
             else {
                 prefs.edit {
                     putString("home_station", sHome); putString("work_station", sWork); putInt("alarm_train_count", spinnerAlarmCount.selectedItemPosition + 1)
@@ -333,8 +350,8 @@ class MainActivity : AppCompatActivity() {
                     putBoolean("timer_2_enabled", timer2.first.isChecked); putStringSet("timer_2_days", timer2.second.filter { it.isChecked }.map { cb -> timer2.third[timer2.second.indexOf(cb)] }.toSet())
                     checkboxMap.forEach { (k, cb) -> putBoolean(k, cb.isChecked) }
                 }
-                ScheduleHelper.scheduleAlarm(this, 1); ScheduleHelper.scheduleAlarm(this, 2)
-                Toast.makeText(this, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show(); dialog.dismiss(); finish()
+                ScheduleHelper.scheduleAlarm(this@MainActivity, 1); ScheduleHelper.scheduleAlarm(this@MainActivity, 2)
+                Toast.makeText(this@MainActivity, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show(); dialog.dismiss(); finish()
             }
         }
     }
@@ -356,13 +373,24 @@ class MainActivity : AppCompatActivity() {
     private fun loadStationsFromAssets(): List<StationData> {
         return try {
             assets.open("stations.json").bufferedReader().use { reader ->
-                val json = JSONObject(reader.readText()); val array = json.getJSONArray("stations")
+                val json = JSONObject(reader.readText())
+                val array = json.getJSONArray("stations")
                 List(array.length()) { i ->
-                    val s = array.getJSONObject(i); val a = s.getJSONArray("aliases")
-                    StationData(s.getString("name"), s.getString("placeId"), s.optString("efaId").takeIf { it.isNotEmpty() }, s.getDouble("lat"), s.getDouble("lon"), List(a.length()) { a.getString(it) })
+                    val s = array.getJSONObject(i)
+                    val a = s.getJSONArray("aliases")
+                    StationData(
+                        s.getString("name"),
+                        s.getString("placeId"),
+                        s.optString("efaId").takeIf { it.isNotEmpty() },
+                        s.getDouble("lat"),
+                        s.getDouble("lon"),
+                        List(a.length()) { a.getString(it) }
+                    )
                 }
             }
-        } catch (_: Exception) { emptyList() }
+        } catch (_: Exception) {
+            emptyList()
+        }
     }
 
     private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
@@ -407,9 +435,13 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(getString(R.string.search_action), null).setNegativeButton(getString(R.string.cancel_button)) { _, _ -> finish() }.setCancelable(false).create()
         dialog.show()
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val f = selectable[sFrom.selectedItemPosition]; val t = selectable[sTo.selectedItemPosition]
-            if (f.name == t.name) Toast.makeText(this, getString(R.string.error_identical_stations), Toast.LENGTH_LONG).show()
-            else { startTrainFetch(f, t); dialog.dismiss() }
+            val f = selectable[sFrom.selectedItemPosition]
+            val t = selectable[sTo.selectedItemPosition]
+            if (f.name == t.name) Toast.makeText(this@MainActivity, getString(R.string.error_identical_stations), Toast.LENGTH_LONG).show()
+            else {
+                startTrainFetch(f, t)
+                dialog.dismiss()
+            }
         }
     }
 }
