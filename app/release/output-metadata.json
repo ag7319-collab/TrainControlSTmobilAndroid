@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.example.traincontrolauto",
+  "applicationId": "com.example.traincontrolstmobilandroid",
   "variantName": "release",
   "elements": [
     {
