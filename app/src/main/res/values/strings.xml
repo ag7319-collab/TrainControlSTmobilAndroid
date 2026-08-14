@@ -58,4 +58,8 @@
     <string name="fri">Fr</string>
     <string name="sat">Sa</string>
     <string name="sun">So</string>
+    <string name="change_station_link">Bahnhof wechseln&#8230;</string>
+    <string name="alarm_option_1">den nächsten Zug</string>
+    <string name="alarm_option_2">die nächsten 2 Züge</string>
+    <string name="alarm_option_3">die nächsten 3 Züge</string>
 </resources>

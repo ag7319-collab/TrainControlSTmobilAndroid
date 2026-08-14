@@ -31,8 +31,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 class MainActivity : AppCompatActivity() {
 
@@ -226,7 +224,7 @@ class MainActivity : AppCompatActivity() {
 
         val header = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(50, 40, 50, 10) }
         val title = TextView(this).apply { text = getString(R.string.departure_station_format, fromStation.name); textSize = 17f; setTypeface(null, Typeface.BOLD); setTextColor(Color.BLACK) }
-        val change = TextView(this).apply { text = "Bahnhof wechseln..."; textSize = 14f; setTextColor(Color.BLACK); paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG; setPadding(0, 10, 0, 0) }
+        val change = TextView(this).apply { text = getString(R.string.change_station_link); textSize = 14f; setTextColor(Color.BLACK); paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG; setPadding(0, 10, 0, 0) }
         header.addView(title); header.addView(change)
 
         val sv = ScrollView(this).apply { setPadding(50, 10, 50, 10) }
@@ -260,7 +258,7 @@ class MainActivity : AppCompatActivity() {
         container.addView(spinnerWork)
 
         // Alarm-Anzahl
-        val alarmOptions = arrayOf("den nächsten Zug", "die nächsten 2 Züge", "die nächsten 3 Züge")
+        val alarmOptions = arrayOf(getString(R.string.alarm_option_1), getString(R.string.alarm_option_2), getString(R.string.alarm_option_3))
         val spinnerAlarmCount = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, alarmOptions); setSelection(prefs.getInt("alarm_train_count", 3) - 1) }
         container.addView(TextView(this).apply { text = getString(R.string.alarm_label); setTypeface(null, Typeface.BOLD); setPadding(0, 30, 0, 0) })
         container.addView(spinnerAlarmCount)
@@ -364,7 +362,7 @@ class MainActivity : AppCompatActivity() {
                     StationData(s.getString("name"), s.getString("placeId"), s.optString("efaId").takeIf { it.isNotEmpty() }, s.getDouble("lat"), s.getDouble("lon"), List(a.length()) { a.getString(it) })
                 }
             }
-        } catch (e: Exception) { emptyList() }
+        } catch (_: Exception) { emptyList() }
     }
 
     private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
@@ -393,7 +391,7 @@ class MainActivity : AppCompatActivity() {
         container.addView(Button(this).apply { text = getString(R.string.other_target_button); setOnClickListener { dialog?.dismiss(); showCustomSearchDialog(selectable[spinner.selectedItemPosition], home) } })
         container.addView(Button(this).apply { text = getString(R.string.cancel_button); setTextColor(Color.DKGRAY); setBackgroundColor(Color.TRANSPARENT); setOnClickListener { dialog?.dismiss(); finish() } })
 
-        dialog = AlertDialog.Builder(this).setTitle("Standort: ${detected.name.split("/").first().trim()}").setView(container).setCancelable(false).create()
+        dialog = AlertDialog.Builder(this).setTitle(getString(R.string.location_label, detected.name.split("/").first().trim())).setView(container).setCancelable(false).create()
         dialog.show()
     }
 
@@ -405,12 +403,12 @@ class MainActivity : AppCompatActivity() {
         container.addView(TextView(this).apply { text = getString(R.string.departure_station_label); setTypeface(null, Typeface.BOLD) }); container.addView(sFrom)
         container.addView(TextView(this).apply { text = getString(R.string.target_station_label); setTypeface(null, Typeface.BOLD); setPadding(0, 30, 0, 10) }); container.addView(sTo)
 
-        val dialog = AlertDialog.Builder(this).setTitle("Bahnhof wechseln").setView(container)
-            .setPositiveButton("Suchen", null).setNegativeButton("Abbrechen") { _, _ -> finish() }.setCancelable(false).create()
+        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.change_station_title)).setView(container)
+            .setPositiveButton(getString(R.string.search_action), null).setNegativeButton(getString(R.string.cancel_button)) { _, _ -> finish() }.setCancelable(false).create()
         dialog.show()
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val f = selectable[sFrom.selectedItemPosition]; val t = selectable[sTo.selectedItemPosition]
-            if (f.name == t.name) Toast.makeText(this, "Abfahrtsbahnhof und Zielbahnhof sind identisch.", Toast.LENGTH_LONG).show()
+            if (f.name == t.name) Toast.makeText(this, getString(R.string.error_identical_stations), Toast.LENGTH_LONG).show()
             else { startTrainFetch(f, t); dialog.dismiss() }
         }
     }
