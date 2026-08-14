@@ -47,4 +47,15 @@
     <string name="notification_channel_name">Eilige Zug-Verspätungen</string>
     <string name="notification_channel_description">Sofortige Benachrichtigungen für Zugverspätungen</string>
     <string name="alarm_label">Alarm bei Verspätung für:</string>
+    <string name="timer_section_title">Automatische Abfrage</string>
+    <string name="timer_1_label">Morgen-Timer (Heim -> Arbeit):</string>
+    <string name="timer_2_label">Nachmittag-Timer (Arbeit -> Heim):</string>
+    <string name="days_label">An folgenden Tagen:</string>
+    <string name="mon">Mo</string>
+    <string name="tue">Di</string>
+    <string name="wed">Mi</string>
+    <string name="thu">Do</string>
+    <string name="fri">Fr</string>
+    <string name="sat">Sa</string>
+    <string name="sun">So</string>
 </resources>
