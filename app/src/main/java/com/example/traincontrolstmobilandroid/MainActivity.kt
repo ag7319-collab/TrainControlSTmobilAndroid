@@ -210,7 +210,15 @@ class MainActivity : AppCompatActivity() {
             val shortTarget = targetStation.name.split("/").first().trim()
             trains.forEachIndexed { i, t ->
                 val terminal = (t.lineTerminal ?: t.destination).split("/").first().trim()
-                val cleanCat = t.categoryNumber.replace("Regionalzug", "", ignoreCase = true).trim()
+                // Entferne lange Namen wie "Regional-Express" oder "Regionalzug" aus der ersten Zeile (Nummerzeile)
+                val cleanCat = t.categoryNumber
+                    .replace("Regional-Express", "", ignoreCase = true)
+                    .replace("Regionalexpress", "", ignoreCase = true)
+                    .replace("Regionale Veloce", "", ignoreCase = true)
+                    .replace("Regionalzug", "", ignoreCase = true)
+                    .replace("Regionale", "", ignoreCase = true)
+                    .replace("Zug", "", ignoreCase = true)
+                    .trim()
                 
                 mb.append(getString(R.string.train_item_header, i + 1, cleanCat)).append("<br>")
                 mb.append(getString(R.string.train_type_to_label, getTrainTypeLabel(t.categoryNumber))).append("<br>")
@@ -411,8 +419,9 @@ class MainActivity : AppCompatActivity() {
     private fun getTrainTypeLabel(cat: String): String {
         val upper = cat.uppercase()
         return when {
-            upper.contains("BUS") -> "Schienenersatzverkehr"
-            upper.startsWith("R ") || upper.startsWith("REG") || upper.startsWith("RV") -> "Regionalzug"
+            upper.contains("BUS") || upper.contains("SEV") || upper.contains("SOSTITUTIVO") -> "Ersatzbus"
+            upper.startsWith("RV") || upper.contains("REGIONALE VELOCE") || upper.contains("REGIONAL-EXPRESS") -> "Regionalexpress"
+            upper.startsWith("R ") || upper.startsWith("REG") || upper.contains("REGIONALE") -> "Regionalzug"
             upper.startsWith("EC") || upper.startsWith("RJ") || upper.contains("RAILJET") || upper.contains("TRENORD") -> "Fernzug"
             upper.contains("FRECCIA") || upper.contains("ITALO") -> "High-Speed"
             else -> "Zug"
