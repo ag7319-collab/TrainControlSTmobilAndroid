@@ -372,7 +372,7 @@ class MainActivity : AppCompatActivity() {
         return allStations.firstOrNull { it.name == name } ?: allStations.first { it.name == default }
     }
 
-    private fun getSelectableRegionalStations() = allStations.asSequence().filter { (!it.placeId.startsWith("9900")) && (!it.placeId.endsWith("00")) && (it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala")) }.sortedBy { it.name }.toList()
+    private fun getSelectableRegionalStations() = allStations.asSequence().filter { (!it.placeId.startsWith("9900")) && (!it.placeId.endsWith("00")) && (it.placeId != "VB") && (it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala")) }.sortedBy { it.name }.toList()
 
     private fun isNetworkAvailable(): Boolean {
         val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager

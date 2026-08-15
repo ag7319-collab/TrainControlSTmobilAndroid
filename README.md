@@ -7,7 +7,7 @@ Eine mobile Anwendung, entwickelt für Android, zur automatischen Überwachung v
 ## Über das Projekt
 Diese App ist die mobile Ergänzung zur Desktop-Version von TrainControlSTmobil. Sie wurde entwickelt, um Pendler in Südtirol proaktiv über Verspätungen auf ihren täglichen Strecken (z.B. Home <-> Work) zu informieren. Im Gegensatz zur manuellen Suche in Fahrplan-Apps prüft diese Anwendung im Hintergrund zu festgelegten Zeiten die gewählten Verbindungen und schlägt nur dann Alarm, wenn tatsächlich eine Verspätung oder ein Ausfall vorliegt.
 
-Die App erkennt dabei automatisch über GPS, ob sich der Nutzer an der "Heimat-Station" oder der "Arbeits-Station" befindet, und wählt die entsprechende Gegenstation als Ziel.
+Die App erkennt dabei automatisch über GPS, ob sich der Nutzer am "Heimat-Bahnhof" oder der "Arbeits-Bahnhof" befindet, und wählt die entsprechende Gegenstation als Ziel.
 
 ## Hauptfunktionen
 *   **Hintergrund-Überwachung:** Automatische Prüfung der Verbindungen zu konfigurierbaren Uhrzeiten (z.B. kurz vor Abfahrt).
