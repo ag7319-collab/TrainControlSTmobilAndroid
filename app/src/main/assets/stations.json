@@ -408,11 +408,12 @@
     {
       "name": "Töll / Tel",
       "placeId": "VB",
-      "efaId": "66000040",
-      "lat": 46.6781,
-      "lon": 11.0933,
+      "efaId": "66000205",
+      "lat": 46.67676,
+      "lon": 11.08508,
       "aliases": [
         "TOELL",
+        "TÖLL",
         "TEL"
       ]
     },
