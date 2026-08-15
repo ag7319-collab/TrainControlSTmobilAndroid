@@ -24,6 +24,7 @@ class TrainFetcher(context: Context) {
         val rawTrainList = mutableListOf<TrainInfo>()
         val limit = 10
 
+        val allowBus = prefs.getBoolean("cat_bus", true)
         val allowReg = prefs.getBoolean("cat_reg", true)
         val allowRv = prefs.getBoolean("cat_rv", true)
         val allowTrenord = prefs.getBoolean("cat_tn_rj", false)
@@ -95,17 +96,22 @@ class TrainFetcher(context: Context) {
                             if (isWalk) continue
 
                             val upper = tName.uppercase()
-                            val isBus = (upper.contains("BUS") || upper.contains("SAD") || upper.contains("SASA") || upper.contains("LINIE")) &&
-                                    !upper.contains(" R ") && !upper.startsWith("R ") && !upper.contains("RV") && !upper.contains("RE ") && !upper.contains("EC") && !upper.contains("RJ")
+                            
+                            // Regex sucht nach "BUS ", gefolgt von 1 bis 3 Ziffern und einer Wortgrenze (\b).
+                            // Trifft z.B. auf "BUS 310" oder "BUS 1" zu, aber nicht auf "BUS 17270" (was oft ein Zug ist).
+                            val isTarnBus = Regex(""".*BUS\s\d{1,3}\b.*""").matches(upper)
+                            
+                            val isRegularBus = upper.contains("SAD") || upper.contains("SASA") || upper.contains("LINIE") || isTarnBus
+                            val isErsatzBus = (upper.contains("BUS") || upper.contains("SEV") || upper.contains("SOSTITUTIVO")) && !isRegularBus
 
                             val isTrenordOrRJ = upper.contains("RJ") || upper.contains("RAILJET") || upper.contains("EC")
                             val isFreccia = upper.contains("FRECCIA") || upper.contains("FR ")
                             val isItalo = upper.contains("ITALO")
                             val isIC = upper.contains("INTERCITY") || upper.contains("IC ")
                             val isRv = upper.contains("RV") || upper.contains("REGIONALE VELOCE")
-                            val isReg = !isBus && !isRv && !isTrenordOrRJ && !isFreccia && !isItalo && !isIC
+                            val isReg = !isRegularBus && !isErsatzBus && !isRv && !isTrenordOrRJ && !isFreccia && !isItalo && !isIC
 
-                            if (isBus || (isTrenordOrRJ && !allowTrenord) || (isFreccia && !allowFreccia) || (isItalo && !allowItalo) || (isIC && !allowIC) || (isRv && !allowRv) || (isReg && !allowReg)) {
+                            if (isRegularBus || (isErsatzBus && !allowBus) || (isTrenordOrRJ && !allowTrenord) || (isFreccia && !allowFreccia) || (isItalo && !allowItalo) || (isIC && !allowIC) || (isRv && !allowRv) || (isReg && !allowReg)) {
                                 tripBanned = true
                                 break
                             }
@@ -153,8 +159,7 @@ class TrainFetcher(context: Context) {
                             ?: targetStation.name
 
                         val upperCat = transpName.uppercase()
-                        val isBus = (upperCat.contains("BUS") || upperCat.contains("SAD") || upperCat.contains("SASA") || upperCat.contains("LINIE")) &&
-                                !upperCat.contains(" R ") && !upperCat.startsWith("R ") && !upperCat.contains("RV") && !upperCat.contains("RE ")
+                        val isErsatzBusMain = upperCat.contains("BUS") || upperCat.contains("SEV") || upperCat.contains("SOSTITUTIVO")
 
                         val planDate = extractDate(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "date")) ?: queryStart.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                         val planTime = extractTime(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "time")) ?: continue
@@ -174,7 +179,7 @@ class TrainFetcher(context: Context) {
                             delay = "pünktlich",
                             platform = originNode.optString("platformName", "-"),
                             hasDelay = false,
-                            isBus = isBus,
+                            isBus = isErsatzBusMain,
                             stopsAtTarget = true,
                             lineTerminal = lineTerminal,
                         )
