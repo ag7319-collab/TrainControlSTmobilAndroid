@@ -17,7 +17,7 @@ class NotificationHelper(private val context: Context) {
 
     init {
         try {
-            alarmToneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
+            alarmToneGenerator = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -44,7 +44,7 @@ class NotificationHelper(private val context: Context) {
         val channel = NotificationChannel(
             channelId,
             context.getString(R.string.notification_channel_name),
-            NotificationManager.IMPORTANCE_HIGH
+            NotificationManager.IMPORTANCE_HIGH,
         ).apply {
             description = context.getString(R.string.notification_channel_description)
             enableVibration(true)
@@ -70,7 +70,7 @@ class NotificationHelper(private val context: Context) {
 
     fun playSingleBeep() {
         try {
-            alarmToneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 350)
+            alarmToneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP, 400)
         } catch (e: Exception) {
             e.printStackTrace()
         }

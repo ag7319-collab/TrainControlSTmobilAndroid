@@ -235,13 +235,13 @@ class TrainFetcher(context: Context) {
 
                                         val statusText = when {
                                             isCancelled -> "entfällt"
-                                            rawDelay.isBlank() || rawDelay == "0" -> "pünktlich"
+                                            (rawDelay.isBlank()) || (rawDelay == "0") -> "pünktlich"
                                             else -> "Verspätung"
                                         }
 
                                         val delayDisplay = when {
                                             isCancelled -> ""
-                                            rawDelay.isBlank() || rawDelay == "0" -> "+0"
+                                            (rawDelay.isBlank()) || (rawDelay == "0") -> "+0"
                                             rawDelay.all { it.isDigit() } -> "+$rawDelay"
                                             else -> rawDelay
                                         }
@@ -300,7 +300,7 @@ class TrainFetcher(context: Context) {
         if (element is JSONObject) {
             val h = element.optString("hour").takeIf { it.isNotEmpty() }?.padStart(2, '0')
             val m = element.optString("minute").takeIf { it.isNotEmpty() }?.padStart(2, '0')
-            if (h != null && m != null) return "$h:$m"
+            if ((h != null) && (m != null)) return "$h:$m"
 
             val t = if (isRT) {
                 element.optString("rtTime").takeIf { it.isNotEmpty() }
@@ -311,8 +311,9 @@ class TrainFetcher(context: Context) {
             t?.let { timeStr ->
                 Regex("""\b(\d{2}:\d{2})\b""").find(timeStr)?.value?.let { return it }
             }
-        } else if (element is String) {
-            Regex("""\b(\d{2}:\d{2})\b""").find(element)?.value?.let { return it }
+        }
+        (element as? String)?.let { str ->
+            Regex("""\b(\d{2}:\d{2})\b""").find(str)?.value?.let { return it }
         }
         return null
     }
@@ -327,7 +328,7 @@ class TrainFetcher(context: Context) {
         val rTime = parseLocalTime(realTime) ?: pTime
 
         var dateTime = LocalDateTime.of(date, rTime)
-        if (rTime.isBefore(pTime) && pTime.hour > 20 && rTime.hour < 4) {
+        if (rTime.isBefore(pTime) && (pTime.hour > 20) && (rTime.hour < 4)) {
             dateTime = dateTime.plusDays(1)
         }
         return dateTime
@@ -351,7 +352,7 @@ class TrainFetcher(context: Context) {
                 val root = JSONObject(responseStr)
                 val sf = root.optJSONObject("stopFinder") ?: return@withContext "66000468"
                 val points = sf.optJSONArray("point")
-                if (points != null && points.length() > 0) {
+                if ((points != null) && (points.length() > 0)) {
                     points.getJSONObject(0).optString("stateless", "66000468")
                 } else {
                     "66000468"

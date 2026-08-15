@@ -5,6 +5,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.time.Duration.Companion.milliseconds
 
 class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -44,11 +45,16 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                 message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}",
                 title = "⚠️ Zugverspätung",
             )
+            // Safety delay: Give the audio hardware enough time to play the tone 
+            // before the WorkManager process is potentially killed.
+            kotlinx.coroutines.delay(1000.milliseconds)
         } else if (trains.isEmpty()) {
             notificationHelper.sendGarminNotification(
                 message = applicationContext.getString(R.string.no_departures),
                 title = "Zug-Anzeige",
             )
+            // Wait a bit to ensure the notification is fully posted
+            kotlinx.coroutines.delay(1000.milliseconds)
         }
 
         Result.success()
