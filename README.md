@@ -38,4 +38,4 @@ Die Anwendung kombiniert Daten aus zwei Quellen:
 *   **Asynchronität:** Kotlin Coroutines
 
 ## Warum diese App?
-Während offizielle Apps oft eine manuelle Suche erfordern, arbeitet TrainControlSTmobilAndroid nach dem "Set and Forget"-Prinzip. Einmal eingerichtet, meldet sich das Smartphone nur noch, wenn es wirklich wichtig ist – ideal für den stressigen Pendleralltag.
+Während andere Apps zumeist eine manuelle Suche erfordern, arbeitet diese hier nach dem "Set and Forget"-Prinzip. Einmal eingerichtet, meldet sich das Smartphone nur noch, wenn es wirklich wichtig ist – man braucht sich nicht mehr darum zu kümmern.
