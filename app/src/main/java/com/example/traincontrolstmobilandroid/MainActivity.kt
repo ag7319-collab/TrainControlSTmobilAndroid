@@ -22,6 +22,7 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -73,6 +74,45 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setShowWhenLocked(true)
+
+        // 1. UI SOFORT aufbauen (Bevor irgendwelche Daten geladen werden!)
+        val rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.WHITE)
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
+        }
+
+        val logoView = ImageView(this).apply {
+            setImageResource(R.mipmap.ic_launcher_round) 
+            val size = (120 * resources.displayMetrics.density).toInt()
+            layoutParams = LinearLayout.LayoutParams(size, size).apply {
+                bottomMargin = (40 * resources.displayMetrics.density).toInt()
+            }
+        }
+
+        val progressBar = ProgressBar(this).apply {
+            isIndeterminate = true
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+
+        val loadingText = TextView(this).apply {
+            text = getString(R.string.loading_train_data)
+            setTypeface(null, Typeface.ITALIC)
+            setTextColor(Color.GRAY) // Nicht zu dunkel, gut lesbar auf Weiß
+            textSize = 14f
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = (20 * resources.displayMetrics.density).toInt()
+            }
+        }
+
+        rootLayout.addView(logoView)
+        rootLayout.addView(progressBar)
+        rootLayout.addView(loadingText)
+        setContentView(rootLayout)
+
+        // 2. Initialisierung starten
         prefs = getSharedPreferences("TrainControlSTmobilPrefs", MODE_PRIVATE)
         notificationHelper = NotificationHelper(this)
         trainFetcher = TrainFetcher(this)
@@ -89,12 +129,6 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
-
-        setShowWhenLocked(true)
-        val frameLayout = FrameLayout(this)
-        val progressBar = ProgressBar(this).apply { isIndeterminate = true }
-        frameLayout.addView(progressBar, FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER })
-        setContentView(frameLayout)
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         checkBatteryOptimization()

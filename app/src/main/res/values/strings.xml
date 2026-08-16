@@ -63,4 +63,5 @@
     <string name="alarm_option_1">den nächsten Zug</string>
     <string name="alarm_option_2">die nächsten 2 Züge</string>
     <string name="alarm_option_3">die nächsten 3 Züge</string>
+    <string name="loading_train_data">Lade Zugdaten&#8230;</string>
 </resources>
