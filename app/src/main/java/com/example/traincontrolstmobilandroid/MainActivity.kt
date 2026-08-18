@@ -195,7 +195,6 @@ class MainActivity : AppCompatActivity() {
     private fun determineStationAndFetch(location: Location) {
         if (!isNetworkAvailable()) {
             Toast.makeText(this, getString(R.string.no_internet), Toast.LENGTH_LONG).show()
-            notificationHelper.sendGarminNotification(getString(R.string.no_internet), "Zug-Anzeige")
             finish()
             return
         }

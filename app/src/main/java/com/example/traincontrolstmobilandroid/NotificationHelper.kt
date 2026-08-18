@@ -26,6 +26,7 @@ class NotificationHelper(private val context: Context) {
     fun sendGarminNotification(
         message: String,
         title: String = "Zug-Anzeige",
+        isSilent: Boolean = false
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ActivityCompat.checkSelfPermission(
@@ -38,32 +39,47 @@ class NotificationHelper(private val context: Context) {
             }
         }
 
-        val channelId = "train_delay_instant_v7"
+        val channelId = if (isSilent) "train_info_silent_v1" else "train_delay_instant_v7"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
-        val channel = NotificationChannel(
-            channelId,
-            context.getString(R.string.notification_channel_name),
-            NotificationManager.IMPORTANCE_HIGH,
-        ).apply {
-            description = context.getString(R.string.notification_channel_description)
-            enableVibration(true)
-            vibrationPattern = longArrayOf(0, 200, 100, 200)
-            setBypassDnd(true)
-            setSound(null, null)
+        if (isSilent) {
+            val silentChannel = NotificationChannel(
+                channelId,
+                "Status-Infos (leise)",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Unaufdringliche Statusmeldungen"
+                enableVibration(false)
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(silentChannel)
+        } else {
+            val channel = NotificationChannel(
+                channelId,
+                context.getString(R.string.notification_channel_name),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = context.getString(R.string.notification_channel_description)
+                enableVibration(true)
+                vibrationPattern = longArrayOf(0, 200, 100, 200)
+                setBypassDnd(true)
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(channel)
         }
-        notificationManager.createNotificationChannel(channel)
 
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
             .setContentText(message.replace("\n", " "))
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(if (isSilent) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
-            .setSound(null)
             .setAutoCancel(true)
+
+        if (!isSilent) {
+            builder.setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)
+        }
 
         notificationManager.notify(1001, builder.build())
     }

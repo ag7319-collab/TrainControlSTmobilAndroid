@@ -32,7 +32,8 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         if (!isNetworkAvailable()) {
             notificationHelper.sendGarminNotification(
                 message = applicationContext.getString(R.string.no_internet),
-                title = "Zug-Anzeige"
+                title = "Zug-Anzeige",
+                isSilent = true
             )
             return@withContext Result.retry()
         }
@@ -46,12 +47,17 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         if (trains.isEmpty()) {
             // Falls während der Abfrage das Internet weggegangen ist
             if (!isNetworkAvailable()) {
-                notificationHelper.sendGarminNotification(applicationContext.getString(R.string.no_internet), "Zug-Anzeige")
+                notificationHelper.sendGarminNotification(
+                    message = applicationContext.getString(R.string.no_internet), 
+                    title = "Zug-Anzeige",
+                    isSilent = true
+                )
                 return@withContext Result.retry()
             }
             notificationHelper.sendGarminNotification(
                 message = applicationContext.getString(R.string.no_departures),
                 title = "Zug-Anzeige",
+                isSilent = true
             )
             kotlinx.coroutines.delay(1000.milliseconds)
             return@withContext Result.success()
