@@ -112,25 +112,14 @@
       ]
     },
     {
-      "name": "Bruneck / Brunico",
-      "placeId": "751",
-      "efaId": "66001194",
-      "lat": 46.7967,
-      "lon": 11.9347,
+      "name": "Vintl / Vandoies",
+      "placeId": "2986",
+      "efaId": "66001179",
+      "lat": 46.8153,
+      "lon": 11.7139,
       "aliases": [
-        "BRUNICO",
-        "BRUNECK"
-      ]
-    },
-    {
-      "name": "Franzensfeste / Fortezza",
-      "placeId": "1356",
-      "efaId": "66001170",
-      "lat": 46.7869,
-      "lon": 11.6094,
-      "aliases": [
-        "FORTEZZA",
-        "FRANZENFESTE"
+        "VINTL",
+        "VANDOIES"
       ]
     },
     {
@@ -142,6 +131,53 @@
       "aliases": [
         "CASTELDARNE",
         "EHRENBURG"
+      ]
+    },
+    {
+      "name": "St. Lorenzen / S. Lorenzo",
+      "placeId": "3091",
+      "efaId": "66001725",
+      "lat": 46.7828,
+      "lon": 11.8997,
+      "aliases": [
+        "ST. LORENZEN",
+        "S. LORENZO",
+        "SAN LORENZO"
+      ]
+    },
+    {
+      "name": "Bruneck / Brunico",
+      "placeId": "751",
+      "efaId": "66001194",
+      "lat": 46.7967,
+      "lon": 11.9347,
+      "aliases": [
+        "BRUNICO",
+        "BRUNECK"
+      ]
+    },
+    {
+      "name": "Bruneck Nord / Brunico Nord",
+      "placeId": "1967",
+      "efaId": "66002308",
+      "lat": 46.8014,
+      "lon": 11.9422,
+      "aliases": [
+        "BRUNECK NORD",
+        "BRUNICO NORD"
+      ]
+    },
+    {
+      "name": "Percha-Kronplatz / Perca-Plan de Corones",
+      "placeId": "723",
+      "efaId": "66001773",
+      "lat": 46.7889,
+      "lon": 11.9792,
+      "aliases": [
+        "PERCHA",
+        "PERCHA-KRONPLATZ",
+        "PERCA",
+        "PERCA-PLAN DE CORONES"
       ]
     },
     {
@@ -167,9 +203,22 @@
       ]
     },
     {
+      "name": "Niederdorf-Prags / Villabassa-Braies",
+      "placeId": "3080",
+      "efaId": "66001961",
+      "lat": 46.7378,
+      "lon": 12.1819,
+      "aliases": [
+        "NIEDERDORF",
+        "NIEDERDORF-PRAGS",
+        "VILLABASSA",
+        "VILLABASSA-BRAIES"
+      ]
+    },
+    {
       "name": "Innichen / San Candido",
       "placeId": "2475",
-      "efaId": "66000392",
+      "efaId": "66001980",
       "lat": 46.7325,
       "lon": 12.2831,
       "aliases": [
@@ -181,7 +230,7 @@
     {
       "name": "Toblach / Dobbiaco",
       "placeId": "1247",
-      "efaId": "66000403",
+      "efaId": "66001219",
       "lat": 46.7233,
       "lon": 12.2217,
       "aliases": [
