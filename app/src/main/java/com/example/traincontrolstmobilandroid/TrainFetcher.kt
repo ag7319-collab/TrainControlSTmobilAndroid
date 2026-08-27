@@ -161,7 +161,7 @@ class TrainFetcher(context: Context) {
                         val upperCat = transpName.uppercase()
                         val isErsatzBusMain = upperCat.contains("BUS") || upperCat.contains("SEV") || upperCat.contains("SOSTITUTIVO")
 
-                        val planDate = extractDate(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "date")) ?: queryStart.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                        val planDate = extractDate(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "date")) ?: now.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                         val planTime = extractTime(originNode, listOf("itdTime", "dateTime", "departureTimePlanned", "time")) ?: continue
 
                         val realTime = extractTime(originNode, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime")) ?: planTime
@@ -257,8 +257,8 @@ class TrainFetcher(context: Context) {
                             }
                         }
                     }
-                } catch (_: Exception) {
-                    // Ignore RFI errors
+                } catch (e: Exception) {
+                    println("DEBUG: RFI-Monitor Cross-Check failed: ${e.message}")
                 }
 
             } catch (e: Exception) {
@@ -323,20 +323,36 @@ class TrainFetcher(context: Context) {
         return null
     }
 
-    private fun calculateActualDepartureDateTime(planDate: String, planTime: String, realTime: String): LocalDateTime {
+    private fun calculateActualDepartureDateTime(
+        planDate: String,
+        planTime: String,
+        realTime: String?
+    ): LocalDateTime {
+        val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
         val date = try {
-            java.time.LocalDate.parse(planDate, DateTimeFormatter.ofPattern("yyyyMMdd"))
+            java.time.LocalDate.parse(planDate, dateFormatter)
         } catch (_: Exception) {
             java.time.LocalDate.now()
         }
-        val pTime = parseLocalTime(planTime) ?: LocalTime.now()
-        val rTime = parseLocalTime(realTime) ?: pTime
 
-        var dateTime = LocalDateTime.of(date, rTime)
-        if (rTime.isBefore(pTime) && (pTime.hour > 20) && (rTime.hour < 4)) {
-            dateTime = dateTime.plusDays(1)
+        val plannedTime = parseLocalTime(planTime) ?: LocalTime.MIDNIGHT
+        val actualTime = parseLocalTime(realTime ?: planTime) ?: plannedTime
+
+        var actualDate = date
+
+        val plannedMinutes = (plannedTime.hour * 60) + plannedTime.minute
+        val actualMinutes = (actualTime.hour * 60) + actualTime.minute
+
+        /*
+         * Mitternachtswechsel erkennen.
+         * Wenn die Abfahrt eigentlich schon gestern war (oder heute sehr spät),
+         * aber die Verspätung sie über Mitternacht schiebt.
+         */
+        if (actualMinutes < plannedMinutes && (plannedMinutes - actualMinutes) > 720) {
+            actualDate = actualDate.plusDays(1)
         }
-        return dateTime
+
+        return LocalDateTime.of(actualDate, actualTime)
     }
 
     private fun parseLocalTime(timeStr: String): LocalTime? {
