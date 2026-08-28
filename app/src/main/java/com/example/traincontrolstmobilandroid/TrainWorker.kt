@@ -33,7 +33,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             notificationHelper.sendGarminNotification(
                 message = applicationContext.getString(R.string.no_internet),
                 title = "Zug-Anzeige",
-                isSilent = true
+                isSilent = true,
             )
             return@withContext Result.retry()
         }
@@ -57,7 +57,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
             notificationHelper.sendGarminNotification(
                 message = applicationContext.getString(R.string.no_departures),
                 title = "Zug-Anzeige",
-                isSilent = true
+                isSilent = true,
             )
             kotlinx.coroutines.delay(1000.milliseconds)
             return@withContext Result.success()

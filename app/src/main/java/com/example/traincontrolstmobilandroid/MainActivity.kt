@@ -1,60 +1,70 @@
 package com.example.traincontrolstmobilandroid
 
 import android.Manifest
-import android.annotation.SuppressLint
-import android.app.KeyguardManager
 import android.app.TimePickerDialog
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Typeface
 import android.location.Location
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.Gravity
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.FrameLayout
-import android.widget.ImageView
-import android.widget.HorizontalScrollView
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.ScrollView
-import android.widget.Spinner
-import android.widget.TextView
+import android.util.Log
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.edit
-import androidx.core.net.toUri
-import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.location.FusedLocationProviderClient
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.util.*
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private lateinit var prefs: SharedPreferences
-    private lateinit var trainFetcher: TrainFetcher
-    private lateinit var notificationHelper: NotificationHelper
+class MainActivity : ComponentActivity() {
 
     companion object {
-        private var lastExecutionTime: Long = 0
-        private const val REQUEST_LOCATION_PERMISSION = 1001
-        private const val REQUEST_NOTIFICATION_PERMISSION = 2001
-
+        val Landtagsrot = Color(0xFFCE1126)
+        
         val CATEGORY_GROUPS = mapOf(
             "Regionalverkehr RFI/SAD" to listOf(
                 CategoryFilter("cat_reg", "Regionalzüge(REG)", listOf("REG", "REGIONALE", "SAD"), defaultState = true),
@@ -70,361 +80,203 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private val allStations: List<StationData> by lazy { loadStationsFromAssets() }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setShowWhenLocked(true)
-
-        // 1. UI SOFORT aufbauen (Bevor irgendwelche Daten geladen werden!)
-        val rootLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.WHITE)
-            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT)
-        }
-
-        val logoView = ImageView(this).apply {
-            setImageResource(R.mipmap.ic_launcher_round) 
-            val size = (120 * resources.displayMetrics.density).toInt()
-            layoutParams = LinearLayout.LayoutParams(size, size).apply {
-                bottomMargin = (40 * resources.displayMetrics.density).toInt()
-            }
-        }
-
-        val progressBar = ProgressBar(this).apply {
-            isIndeterminate = true
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        }
-
-        val loadingText = TextView(this).apply {
-            text = getString(R.string.loading_train_data)
-            setTypeface(null, Typeface.ITALIC)
-            setTextColor(Color.GRAY) // Nicht zu dunkel, gut lesbar auf Weiß
-            textSize = 14f
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = (20 * resources.displayMetrics.density).toInt()
-            }
-        }
-
-        rootLayout.addView(logoView)
-        rootLayout.addView(progressBar)
-        rootLayout.addView(loadingText)
-        setContentView(rootLayout)
-
-        // 2. Initialisierung starten
-        prefs = getSharedPreferences("TrainControlSTmobilPrefs", MODE_PRIVATE)
-        notificationHelper = NotificationHelper(this)
-        trainFetcher = TrainFetcher(this)
-
-        if (allStations.isEmpty()) {
-            Toast.makeText(this, "stations.json konnte nicht geladen werden.", Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
-
-        val currentTime = System.currentTimeMillis()
-        if ((currentTime - lastExecutionTime) < 5000) {
-            Toast.makeText(this, getString(R.string.wait_moment), Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
-
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        checkBatteryOptimization()
-    }
-
-    @SuppressLint("BatteryLife")
-    private fun checkBatteryOptimization() {
-        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        if (!powerManager.isIgnoringBatteryOptimizations(packageName)) {
-            AlertDialog.Builder(this)
-                .setTitle(getString(R.string.battery_opt_title))
-                .setMessage(getString(R.string.battery_opt_message))
-                .setPositiveButton(getString(R.string.battery_opt_allow)) { _, _ ->
-                    try {
-                        startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                    } catch (_: Exception) {
-                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply { data = "package:$packageName".toUri() })
-                    }
-                    finish()
-                }
-                .setNegativeButton(getString(R.string.battery_opt_later)) { _, _ -> startAppFlow() }
-                .setCancelable(false).show()
-            return
-        }
-        startAppFlow()
-    }
-
-    private fun startAppFlow() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATION_PERMISSION)
-                return
-            }
-        }
-        checkLocationPermissionAndFetch()
-    }
-
-    private fun checkLocationPermissionAndFetch() {
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), REQUEST_LOCATION_PERMISSION)
-            return
-        }
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            if (location != null) determineStationAndFetch(location)
-            else {
-                Toast.makeText(this, getString(R.string.no_location), Toast.LENGTH_SHORT).show()
-                finish()
-            }
-        }
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_NOTIFICATION_PERMISSION) checkLocationPermissionAndFetch()
-        else if (requestCode == REQUEST_LOCATION_PERMISSION) {
-            if (grantResults.isNotEmpty() && (grantResults[0] == PackageManager.PERMISSION_GRANTED)) checkLocationPermissionAndFetch()
-            else {
-                Toast.makeText(this, getString(R.string.no_location), Toast.LENGTH_LONG).show()
-                finish()
-            }
-        }
-    }
-
-    private fun determineStationAndFetch(location: Location) {
-        if (!isNetworkAvailable()) {
-            Toast.makeText(this, getString(R.string.no_internet), Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
-        val homeStation = getSelectedStation("home_station", "Brixen / Bressanone")
-        val workStation = getSelectedStation("work_station", "Bozen / Bolzano")
-        val regionalStations = allStations.filter { !it.placeId.startsWith("9900") }
-        val currentStation = regionalStations.minByOrNull { calculateDistance(location.latitude, location.longitude, it.lat, it.lon) } ?: homeStation
-
-        if ((currentStation.name == homeStation.name) || (currentStation.name == workStation.name)) {
-            val targetStation = if (currentStation.name == homeStation.name) workStation else homeStation
-            startTrainFetch(currentStation, targetStation)
-        } else {
-            val km = getSystemService(KeyguardManager::class.java)
-            if (km?.isKeyguardLocked == true) finish()
-            else showLocationStationDialog(currentStation, homeStation, workStation)
-        }
-    }
-
-    private fun startTrainFetch(currentStation: StationData, targetStation: StationData) {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val trains = trainFetcher.fetchAndParseTrains(currentStation, targetStation)
-            val relevantTrains = trains.filter { it.stopsAtTarget != false }
-            val alarmTrainCount = prefs.getInt("alarm_train_count", 3)
-            val delayedTrain = relevantTrains.asSequence().take(alarmTrainCount).firstOrNull { it.hasAnyDelay }
-            lastExecutionTime = System.currentTimeMillis()
-            val isScreenLocked = getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true
-
-            if (delayedTrain != null) {
-                notificationHelper.playSingleBeep()
-                if (isScreenLocked) notificationHelper.sendGarminNotification("Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}", "⚠️ Zugverspätung")
-            } else if (trains.isEmpty() && isScreenLocked) {
-                notificationHelper.sendGarminNotification(getString(R.string.no_departures), "Zug-Anzeige")
-            }
-
-            withContext(Dispatchers.Main) {
-                if (getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true) finish()
-                else showResultPopup(currentStation, targetStation, trains)
-            }
-        }
-    }
-
-    private fun showResultPopup(fromStation: StationData, targetStation: StationData, trains: List<TrainInfo>) {
-        val mb = StringBuilder()
-        if (trains.isEmpty()) mb.append(getString(R.string.no_departures))
-        else {
-            val shortTarget = targetStation.name.split("/").first().trim()
-            trains.forEachIndexed { i, t ->
-                val terminal = (t.lineTerminal ?: t.destination).split("/").first().trim()
-                // Entferne lange Namen wie "Regional-Express" oder "Regionalzug" aus der ersten Zeile (Nummerzeile)
-                val cleanCat = t.categoryNumber
-                    .replace("Regional-Express", "", ignoreCase = true)
-                    .replace("Regionalexpress", "", ignoreCase = true)
-                    .replace("Regionale Veloce", "", ignoreCase = true)
-                    .replace("Regionalzug", "", ignoreCase = true)
-                    .replace("Regionale", "", ignoreCase = true)
-                    .replace("Zug", "", ignoreCase = true)
-                    .trim()
-                
-                mb.append(getString(R.string.train_item_header, i + 1, cleanCat)).append("<br>")
-                mb.append(getString(R.string.train_type_to_label, getTrainTypeLabel(t.categoryNumber))).append("<br>")
-                mb.append("<b>$terminal</b><br>")
-                mb.append(getString(R.string.departure_time_format, t.time)).append("<br>")
-                when (t.stopsAtTarget) {
-                    true -> mb.append(getString(R.string.stops_true_format, shortTarget)).append("<br>")
-                    false -> mb.append(getString(R.string.stops_false_format, shortTarget)).append("<br>")
-                    else -> {}
-                }
-                if (t.isBus) mb.append(getString(R.string.platform_bus_label)).append("<br>")
-                else mb.append(getString(R.string.platform_label_format, t.platform)).append("<br>")
-                if (t.hasDelay) mb.append(getString(R.string.delay_label_critical_format, t.delay))
-                else mb.append(getString(R.string.delay_label_format, t.delay))
-                if ((t.rfiStatus != null) || (t.rfiDelay != null)) {
-                    val isRfiCritical = (t.rfiStatus == "Verspätung") || (t.rfiStatus == "entfällt")
-                    val rfiColor = if (isRfiCritical) "#D32F2F" else "#999999"
-                    val rfiStatusText = t.rfiStatus ?: "pünktlich"
-                    val rfiDelayText = t.rfiDelay ?: "+0"
-                    val rfiInfo = if (isRfiCritical) "<b>RFI: $rfiStatusText ($rfiDelayText)</b>" else "RFI: $rfiStatusText ($rfiDelayText)"
-                    mb.append("<br><small><font color='$rfiColor'>$rfiInfo</font></small>")
-                }
-                if (i < (trains.size - 1)) mb.append("<br>-----------------------------------<br>")
-            }
-        }
-
-        val header = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(50, 40, 50, 10) }
-        val title = TextView(this).apply { text = getString(R.string.departure_station_format, fromStation.name); textSize = 17f; setTypeface(null, Typeface.BOLD); setTextColor(Color.BLACK) }
-        val change = TextView(this).apply { text = getString(R.string.change_station_link); textSize = 14f; setTextColor(Color.BLACK); paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG; setPadding(0, 10, 0, 0) }
-        header.addView(title); header.addView(change)
-
-        val sv = ScrollView(this).apply { setPadding(50, 10, 50, 10) }
-        val tv = TextView(this).apply { text = android.text.Html.fromHtml(mb.toString(), android.text.Html.FROM_HTML_MODE_LEGACY); textSize = 15f; setTextColor(Color.BLACK) }
-        sv.addView(tv)
-
-        val dialog = AlertDialog.Builder(this).setCustomTitle(header).setView(sv)
-            .setPositiveButton("OK") { d, _ -> d.dismiss(); finish() }
-            .setNeutralButton("⚙️") { d, _ -> d.dismiss(); showSettingsDialog() }
-            .setCancelable(false).create()
-        change.setOnClickListener { dialog.dismiss(); showCustomSearchDialog(fromStation, targetStation) }
-        dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(Color.BLACK)
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.let { it.setTextColor(Color.BLACK); it.textSize = 18f }
-    }
-
-    private fun showSettingsDialog() {
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(60, 40, 60, 40) }
-        val selectable = getSelectableRegionalStations()
-        val stationNames = selectable.map { it.name }.toTypedArray()
-
-        val currentHome = prefs.getString("home_station", "Brixen / Bressanone") ?: "Brixen / Bressanone"
-        val currentWork = prefs.getString("work_station", "Bozen / Bolzano") ?: "Bozen / Bolzano"
-
-        val spinnerHome = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, stationNames); setSelection(stationNames.indexOf(currentHome).coerceAtLeast(0)) }
-        val spinnerWork = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, stationNames); setSelection(stationNames.indexOf(currentWork).coerceAtLeast(0)) }
-
-        container.addView(TextView(this).apply { text = getString(R.string.home_address_label); setTypeface(null, Typeface.BOLD) })
-        container.addView(spinnerHome)
-        container.addView(TextView(this).apply { text = getString(R.string.work_address_label); setTypeface(null, Typeface.BOLD); setPadding(0, 20, 0, 0) })
-        container.addView(spinnerWork)
-
-        // Alarm-Anzahl
-        val alarmOptions = arrayOf(getString(R.string.alarm_option_1), getString(R.string.alarm_option_2), getString(R.string.alarm_option_3))
-        val spinnerAlarmCount = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, alarmOptions); setSelection(prefs.getInt("alarm_train_count", 3) - 1) }
-        container.addView(TextView(this).apply { text = getString(R.string.alarm_label); setTypeface(null, Typeface.BOLD); setPadding(0, 30, 0, 0) })
-        container.addView(spinnerAlarmCount)
-
-        // Timer Section
-        container.addView(TextView(this).apply { text = getString(R.string.timer_section_title); setTypeface(null, Typeface.BOLD); setPadding(0, 40, 0, 10); textSize = 18f; setTextColor(Color.BLACK) })
         
-        val createTimerView = { index: Int, label: String ->
-            val enabled = prefs.getBoolean("timer_${index}_enabled", false)
-            val h = prefs.getInt("timer_${index}_hour", if (index == 1) 7 else 16)
-            val m = prefs.getInt("timer_${index}_minute", 0)
-            
-            val cb = CheckBox(this).apply { text = label; isChecked = enabled }
-            val btnTime = Button(this).apply { text = String.format(java.util.Locale.ROOT, "%02d:%02d", h, m); isEnabled = enabled }
-            btnTime.setOnClickListener {
-                TimePickerDialog(
-                    this,
-                    { _, hour, min ->
-                        btnTime.text = String.format(java.util.Locale.ROOT, "%02d:%02d", hour, min)
-                        prefs.edit { putInt("timer_${index}_hour", hour); putInt("timer_${index}_minute", min) }
-                    },
-                    prefs.getInt("timer_${index}_hour", h),
-                    prefs.getInt("timer_${index}_minute", m),
-                    true,
-                ).show()
-            }
-            cb.setOnCheckedChangeListener { _, checked -> btnTime.isEnabled = checked }
-            
-            val daysLayout = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(20, 10, 20, 10)
-            }
-            val dayKeys = listOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
-            val dayLabels = listOf(R.string.mon, R.string.tue, R.string.wed, R.string.thu, R.string.fri, R.string.sat, R.string.sun)
-            val dayCbs = mutableListOf<CheckBox>()
-            val selectedDays = prefs.getStringSet("timer_${index}_days", setOf("mon", "tue", "wed", "thu", "fri")) ?: setOf()
-            
-            dayKeys.forEachIndexed { i, key ->
-                val dayCb = CheckBox(this).apply { text = getString(dayLabels[i]); isChecked = key in selectedDays; setPadding(0, 0, 10, 0); isEnabled = enabled }
-                dayCbs.add(dayCb)
-                daysLayout.addView(dayCb)
-            }
-            cb.setOnCheckedChangeListener { _, checked -> 
-                btnTime.isEnabled = checked
-                dayCbs.forEach { it.isEnabled = checked }
+        val prefs = getSharedPreferences("TrainControlSTmobilPrefs", MODE_PRIVATE)
+        val trainFetcher = TrainFetcher(this)
+
+        setContent {
+            val isDark = isSystemInDarkTheme()
+            val customColorScheme = if (isDark) {
+                darkColorScheme(
+                    primary = Landtagsrot,
+                    secondary = Landtagsrot,
+                    tertiary = Color.Gray,
+                    onPrimary = Color.White,
+                )
+            } else {
+                lightColorScheme(
+                    primary = Landtagsrot,
+                    secondary = Landtagsrot,
+                    tertiary = Color.Gray,
+                    onPrimary = Color.White,
+                )
             }
 
-            val hsvDays = HorizontalScrollView(this).apply {
-                isHorizontalScrollBarEnabled = false
-                addView(daysLayout)
-            }
-            container.addView(cb)
-            container.addView(btnTime)
-            container.addView(hsvDays, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            Triple(cb, dayCbs, dayKeys)
-        }
-
-        val timer1 = createTimerView(1, getString(R.string.timer_1_label))
-        val timer2 = createTimerView(2, getString(R.string.timer_2_label))
-
-        // Operators
-        container.addView(TextView(this).apply { text = getString(R.string.operators_label); setTypeface(null, Typeface.BOLD); setPadding(0, 30, 0, 10) })
-        val checkboxMap = mutableMapOf<String, CheckBox>()
-        CATEGORY_GROUPS.forEach { (title, filters) ->
-            container.addView(TextView(this).apply { text = getString(R.string.operator_format, title); setTypeface(null, Typeface.BOLD); setPadding(10, 15, 0, 5); setTextColor(Color.DKGRAY) })
-            filters.forEach { f ->
-                val cb = CheckBox(this).apply { text = f.label; isChecked = prefs.getBoolean(f.prefKey, f.defaultState); setPadding(30, 0, 0, 0) }
-                checkboxMap[f.prefKey] = cb; container.addView(cb)
-            }
-        }
-
-        val sv = ScrollView(this).apply { addView(container) }
-        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.settings_dialog_title)).setView(sv)
-            .setPositiveButton(getString(R.string.save_action), null)
-            .setNegativeButton(getString(R.string.cancel_button)) { _, _ -> finish() }.create()
-
-        dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val sHome = spinnerHome.selectedItem.toString(); val sWork = spinnerWork.selectedItem.toString()
-            if (sHome == sWork) Toast.makeText(this@MainActivity, getString(R.string.error_identical_addresses), Toast.LENGTH_LONG).show()
-            else {
-                prefs.edit {
-                    putString("home_station", sHome); putString("work_station", sWork); putInt("alarm_train_count", spinnerAlarmCount.selectedItemPosition + 1)
-                    putBoolean("timer_1_enabled", timer1.first.isChecked); putStringSet("timer_1_days", timer1.second.asSequence().filter { it.isChecked }.map { cb -> timer1.third[timer1.second.indexOf(cb)] }.toSet())
-                    putBoolean("timer_2_enabled", timer2.first.isChecked); putStringSet("timer_2_days", timer2.second.asSequence().filter { it.isChecked }.map { cb -> timer2.third[timer2.second.indexOf(cb)] }.toSet())
-                    checkboxMap.forEach { (k, cb) -> putBoolean(k, cb.isChecked) }
+            MaterialTheme(
+                colorScheme = customColorScheme,
+            ) {
+                Surface(modifier = Modifier.fillMaxSize()) {
+                    TrainApp(
+                        onFinish = { finish() },
+                        trainFetcher = trainFetcher,
+                        prefs = prefs,
+                    )
                 }
-                ScheduleHelper.scheduleAlarm(this@MainActivity, 1); ScheduleHelper.scheduleAlarm(this@MainActivity, 2)
-                Toast.makeText(this@MainActivity, getString(R.string.settings_saved), Toast.LENGTH_SHORT).show(); dialog.dismiss(); finish()
+            }
+        }
+    }
+}
+
+@Composable
+fun BatteryOptimizationDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Energieeinstellungen") },
+        text = {
+            Text("Damit die App auch im Hintergrund zuverlässig über Verspätungen informieren kann, muss die Akku-Optimierung für diese App deaktiviert werden (Einstellung 'Nicht eingeschränkt').")
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    context.startActivity(intent)
+                    onDismiss()
+                }
+            ) {
+                Text("Einstellungen öffnen")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Später")
+            }
+        }
+    )
+}
+
+sealed class UIState {
+    object Loading : UIState()
+    data class Results(val from: StationData, val to: StationData, val trains: List<TrainInfo>) : UIState()
+    data class LocationSelection(val detected: StationData, val home: StationData, val work: StationData) : UIState()
+    data class CustomSearch(val from: StationData, val to: StationData) : UIState()
+}
+
+class TrainViewModel(
+    private val trainFetcher: TrainFetcher,
+    private val prefs: SharedPreferences,
+    private val appContext: Context,
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow<UIState>(UIState.Loading)
+    val uiState: StateFlow<UIState> = _uiState.asStateFlow()
+
+    private val _showSettings = MutableStateFlow(value = false)
+    val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
+
+    private val _selectedTrain = MutableStateFlow<TrainInfo?>(null)
+    val selectedTrain: StateFlow<TrainInfo?> = _selectedTrain.asStateFlow()
+
+    private val _allStations = MutableStateFlow<List<StationData>>(emptyList())
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            _allStations.value = loadStationsFromAssets()
+        }
+    }
+
+    fun startAppFlow() {
+        viewModelScope.launch {
+            var count = 0
+            while ((_allStations.value.isEmpty()) && (count < 50)) {
+                kotlinx.coroutines.delay(100.milliseconds)
+                count++
+            }
+
+            val home = getSelectedStation("home_station", "Brixen / Bressanone")
+            val work = getSelectedStation("work_station", "Bozen / Bolzano")
+
+            if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                fetchTrains(home, work)
+                return@launch
+            }
+
+            try {
+                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(appContext)
+                
+                // Add a timeout for location fetch
+                var locationReceived = false
+                viewModelScope.launch {
+                    kotlinx.coroutines.delay(5.seconds)
+                    if (!locationReceived) {
+                        Log.d("TrainControl", "Location timeout, fallback")
+                        fetchTrains(home, work)
+                    }
+                }
+
+                fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+                    locationReceived = true
+                    if (location != null) {
+                        determineStation(location, home, work)
+                    } else {
+                        fetchTrains(home, work)
+                    }
+                }.addOnFailureListener {
+                    locationReceived = true
+                    fetchTrains(home, work)
+                }
+            } catch (_: Exception) {
+                fetchTrains(home, work)
             }
         }
     }
 
-    private fun getSelectedStation(key: String, default: String): StationData {
+    private fun determineStation(location: Location, home: StationData, work: StationData) {
+        val stations = _allStations.value
+        if (stations.isEmpty()) {
+            fetchTrains(home, work)
+            return
+        }
+
+        val currentStation = stations.asSequence().filter { !it.placeId.startsWith("9900") }.minByOrNull { 
+            val res = FloatArray(1)
+            Location.distanceBetween(location.latitude, location.longitude, it.lat, it.lon, res)
+            res[0]
+        } ?: home
+
+        if ((currentStation.name == home.name) || (currentStation.name == work.name)) {
+            val targetStation = if (currentStation.name == home.name) work else home
+            fetchTrains(currentStation, targetStation)
+        } else {
+            _uiState.value = UIState.LocationSelection(currentStation, home, work)
+        }
+    }
+
+    fun fetchTrains(from: StationData, to: StationData) {
+        _uiState.value = UIState.Loading
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val trains = trainFetcher.fetchAndParseTrains(from, to)
+                _uiState.value = UIState.Results(from, to, trains)
+            } catch (_: Exception) {
+                _uiState.value = UIState.Results(from, to, emptyList())
+            }
+        }
+    }
+
+    fun getSelectedStation(key: String, default: String): StationData {
+        val stations = _allStations.value
         val name = prefs.getString(key, null) ?: default
-        return allStations.firstOrNull { it.name == name } ?: allStations.first { it.name == default }
+        return stations.firstOrNull { it.name == name } ?: stations.firstOrNull { it.name == default } 
+            ?: StationData(default, "000", null, 46.4983, 11.3548, emptyList())
     }
 
-    private fun getSelectableRegionalStations() = allStations.asSequence().filter { (!it.placeId.startsWith("9900")) && (it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala")) }.sortedBy { it.name }.toList()
+    fun getSelectableRegionalStations() = _allStations.value.asSequence()
+        .filter { (!it.placeId.startsWith("9900")) && (it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala")) }
+        .sortedBy { it.name }.toList()
 
-    private fun isNetworkAvailable(): Boolean {
-        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
-        val net = cm.activeNetwork ?: return false
-        val cap = cm.getNetworkCapabilities(net) ?: return false
-        return cap.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || cap.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) || cap.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-    }
+    fun openSettings() { _showSettings.value = true }
+    fun closeSettings() { _showSettings.value = false }
+    fun selectTrain(train: TrainInfo?) { _selectedTrain.value = train }
+    fun showCustomSearch(from: StationData, to: StationData) { _uiState.value = UIState.CustomSearch(from, to) }
 
     private fun loadStationsFromAssets(): List<StationData> {
         return try {
-            assets.open("stations.json").bufferedReader().use { reader ->
+            appContext.assets.open("stations.json").bufferedReader().use { reader ->
                 val json = JSONObject(reader.readText())
                 val array = json.getJSONArray("stations")
                 List(array.length()) { i ->
@@ -444,68 +296,510 @@ class MainActivity : AppCompatActivity() {
             emptyList()
         }
     }
+}
 
-    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
-        val res = FloatArray(1); Location.distanceBetween(lat1, lon1, lat2, lon2, res); return res[0]
-    }
-
-    private fun getTrainTypeLabel(cat: String): String {
-        val upper = cat.uppercase()
-        return when {
-            upper.contains("BUS") || upper.contains("SEV") || upper.contains("SOSTITUTIVO") -> "Ersatzbus"
-            upper.startsWith("RV") || upper.contains("REGIONALE VELOCE") || upper.contains("REGIONAL-EXPRESS") -> "Regionalexpress"
-            upper.startsWith("R ") || upper.startsWith("REG") || upper.contains("REGIONALE") -> "Regionalzug"
-            upper.startsWith("EC") || upper.startsWith("RJ") || upper.contains("RAILJET") || upper.contains("TRENORD") -> "Fernzug"
-            upper.contains("FRECCIA") || upper.contains("ITALO") -> "High-Speed"
-            else -> "Zug"
-        }
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun showLocationStationDialog(detected: StationData, home: StationData, work: StationData) {
-        val selectable = getSelectableRegionalStations(); val names = selectable.map { it.name }.toTypedArray()
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(60, 40, 60, 20) }
-        val spinner = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, names); setSelection(selectable.indexOfFirst { it.name == detected.name }.coerceAtLeast(0)) }
-        container.addView(TextView(this).apply { text = getString(R.string.departure_station_label); setTypeface(null, Typeface.BOLD); setTextColor(Color.BLACK) })
-        container.addView(spinner)
-        container.addView(TextView(this).apply { text = getString(R.string.select_target_label); setTypeface(null, Typeface.BOLD); setTextColor(Color.BLACK); setPadding(0, 40, 0, 10) })
-        
-        var dialog: AlertDialog? = null
-        val btn = { label: String, target: StationData ->
-            Button(this).apply { text = label; setOnClickListener {
-                val from = selectable[spinner.selectedItemPosition]
-                if (from.name == target.name) Toast.makeText(context, getString(R.string.error_identical_stations), Toast.LENGTH_LONG).show()
-                else { startTrainFetch(from, target); dialog?.dismiss() }
-            }}
-        }
-        container.addView(btn(getString(R.string.to_work_button, work.name.split("/").first().trim()), work))
-        container.addView(btn(getString(R.string.to_home_button, home.name.split("/").first().trim()), home))
-        container.addView(Button(this).apply { text = getString(R.string.other_target_button); setOnClickListener { dialog?.dismiss(); showCustomSearchDialog(selectable[spinner.selectedItemPosition], home) } })
-        container.addView(Button(this).apply { text = getString(R.string.cancel_button); setTextColor(Color.DKGRAY); setBackgroundColor(Color.TRANSPARENT); setOnClickListener { dialog?.dismiss(); finish() } })
-
-        dialog = AlertDialog.Builder(this).setTitle(getString(R.string.location_label, detected.name.split("/").first().trim())).setView(container).setCancelable(false).create()
-        dialog.show()
-    }
-
-    private fun showCustomSearchDialog(from: StationData, to: StationData) {
-        val selectable = getSelectableRegionalStations(); val names = selectable.map { it.name }.toTypedArray()
-        val container = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(60, 40, 60, 10) }
-        val sFrom = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, names); setSelection(selectable.indexOfFirst { it.name == from.name }.coerceAtLeast(0)) }
-        val sTo = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, names); setSelection(selectable.indexOfFirst { it.name == to.name }.coerceAtLeast(0)) }
-        container.addView(TextView(this).apply { text = getString(R.string.departure_station_label); setTypeface(null, Typeface.BOLD) }); container.addView(sFrom)
-        container.addView(TextView(this).apply { text = getString(R.string.target_station_label); setTypeface(null, Typeface.BOLD); setPadding(0, 30, 0, 10) }); container.addView(sTo)
-
-        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.change_station_title)).setView(container)
-            .setPositiveButton(getString(R.string.search_action), null).setNegativeButton(getString(R.string.cancel_button)) { _, _ -> finish() }.setCancelable(false).create()
-        dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val f = selectable[sFrom.selectedItemPosition]
-            val t = selectable[sTo.selectedItemPosition]
-            if (f.name == t.name) Toast.makeText(this@MainActivity, getString(R.string.error_identical_stations), Toast.LENGTH_LONG).show()
-            else {
-                startTrainFetch(f, t)
-                dialog.dismiss()
+@Composable
+fun TrainApp(
+    onFinish: () -> Unit,
+    trainFetcher: TrainFetcher,
+    prefs: SharedPreferences
+) {
+    val context = LocalContext.current
+    val viewModel: TrainViewModel = viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return TrainViewModel(trainFetcher, prefs, context.applicationContext) as T
             }
         }
+    )
+
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val showSettings by viewModel.showSettings.collectAsStateWithLifecycle()
+    val selectedTrain by viewModel.selectedTrain.collectAsStateWithLifecycle()
+
+    var showBatteryDialog by remember { mutableStateOf(value = false) }
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        viewModel.startAppFlow()
+    }
+
+    LaunchedEffect(Unit) {
+        // Check battery optimization
+        val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
+            showBatteryDialog = true
+        }
+
+        val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        
+        if (permissions.all { ActivityCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) {
+            viewModel.startAppFlow()
+        } else {
+            launcher.launch(permissions.toTypedArray())
+        }
+    }
+
+    if (showBatteryDialog) {
+        BatteryOptimizationDialog { showBatteryDialog = false }
+    }
+
+    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            when (val state = uiState) {
+                is UIState.Loading -> LoadingScreen()
+                is UIState.Results -> ResultsScreen(
+                    state.from, state.to, state.trains,
+                    onOpenSettings = { viewModel.openSettings() },
+                    onFinish = onFinish,
+                    onChangeStation = { viewModel.showCustomSearch(state.from, state.to) },
+                ) {
+                    viewModel.selectTrain(it)
+                }
+                is UIState.LocationSelection -> LocationStationDialog(
+                    state.detected, state.home, state.work,
+                    onTargetSelected = { from, to -> viewModel.fetchTrains(from, to) },
+                    onOtherTarget = { from, to -> viewModel.showCustomSearch(from, to) },
+                    onCancel = onFinish,
+                    viewModel = viewModel,
+                )
+                is UIState.CustomSearch -> CustomSearchDialog(
+                    state.from, state.to,
+                    onSearch = { from, to -> viewModel.fetchTrains(from, to) },
+                    onCancel = onFinish,
+                    viewModel = viewModel,
+                )
+            }
+
+            if (showSettings) {
+                SettingsDialog(
+                    onDismiss = { viewModel.closeSettings() },
+                    viewModel = viewModel,
+                    prefs = prefs,
+                    onFinish = onFinish
+                )
+            }
+
+            if (selectedTrain != null) {
+                TripDetailBottomSheet(train = selectedTrain!!) {
+                    viewModel.selectTrain(null)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LoadingScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(140.dp),
+            tint = MainActivity.Landtagsrot
+        )
+        Spacer(modifier = Modifier.height(20.dp))
+        CircularProgressIndicator(color = MainActivity.Landtagsrot)
+        Spacer(modifier = Modifier.height(20.dp))
+        Text(
+            text = "Lade Zugdaten...",
+            fontStyle = FontStyle.Italic,
+            color = Color.Gray,
+            fontSize = 14.sp,
+        )
+    }
+}
+
+@Composable
+fun ResultsScreen(
+    from: StationData,
+    to: StationData,
+    trains: List<TrainInfo>,
+    onOpenSettings: () -> Unit,
+    onFinish: () -> Unit,
+    onChangeStation: () -> Unit,
+    onTrainClick: (TrainInfo) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Abfahrt: ${from.name}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "Bahnhof ändern",
+                    color = Color.DarkGray,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable { onChangeStation() },
+                )
+            }
+            IconButton(onClick = onOpenSettings) {
+                Icon(Icons.Default.Settings, contentDescription = "Settings")
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        if (trains.isEmpty()) {
+            Text("Keine Abfahrten gefunden")
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(trains) { train ->
+                    TrainItem(train, to) { onTrainClick(train) }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                }
+            }
+        }
+        Button(
+            onClick = onFinish,
+            modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
+        ) { Text("OK") }
+    }
+}
+
+@Composable
+fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
+    val terminal = (train.lineTerminal ?: train.destination).split("/").first().trim()
+    val cleanCat = train.categoryNumber
+        .replace("Regional-Express", "", ignoreCase = true)
+        .replace("Regionalexpress", "", ignoreCase = true)
+        .replace("Regionale Veloce", "", ignoreCase = true)
+        .replace("Regionalzug", "", ignoreCase = true)
+        .replace("Regionale", "", ignoreCase = true)
+        .replace("Zug", "", ignoreCase = true)
+        .trim()
+    
+    val shortTarget = target.name.split("/").first().trim()
+
+    Column(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(4.dp)) {
+        Text(text = "1. n. $cleanCat, ${getTrainTypeLabel(train.categoryNumber)}", style = MaterialTheme.typography.bodySmall)
+        
+        FlowRow(
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = terminal,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (!terminal.equals(shortTarget, ignoreCase = true)) {
+                    Text(
+                        text = " | ",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.Gray,
+                    )
+                }
+            }
+            
+            if (!terminal.equals(shortTarget, ignoreCase = true)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = Color(0xFF4CAF50),
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "hält in $shortTarget",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Normal,
+                    )
+                }
+            }
+        }
+        
+        Row {
+            Text(
+                text = "${train.time} Uhr ",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = if (train.isBus) "Bus" else "Gleis ${train.platform}",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            val delayColor = if (train.hasAnyDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+            Text(
+                text = train.bestDelayInfo,
+                color = delayColor,
+                fontWeight = if (train.hasAnyDelay) FontWeight.Bold else FontWeight.Normal,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        if (train.stopsAtTarget == false) {
+            Text(text = "Hält NICHT in $shortTarget", color = Color.Red, style = MaterialTheme.typography.bodySmall)
+        }
+        if ((train.rfiStatus != null) || (train.rfiDelay != null)) {
+            val isCritical = (train.rfiStatus == "Verspätung") || (train.rfiStatus == "entfällt")
+            Text(
+                text = "RFI: ${train.rfiStatus ?: "pünktlich"} (${train.rfiDelay ?: "+0"})",
+                color = if (isCritical) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (isCritical) FontWeight.Bold else FontWeight.Normal
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) {
+            Text(text = "${train.categoryNumber} nach ${train.lineTerminal ?: train.destination}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(16.dp))
+            LazyColumn {
+                items(train.stops) { stop ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = stop.name, fontWeight = FontWeight.Medium)
+                            Text(text = "Geplant: ${stop.scheduledTime}", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            val color = if ((stop.isCancelled) || (stop.delay != "pünktlich")) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+                            Text(text = stop.actualTime, color = color, fontWeight = FontWeight.Bold)
+                            Text(text = stop.delay, color = color, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    HorizontalDivider()
+                }
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: SharedPreferences, onFinish: () -> Unit) {
+    val context = LocalContext.current
+    val stations = viewModel.getSelectableRegionalStations()
+    val stationNames = stations.map { it.name }
+    
+    var homeStation by remember { mutableStateOf(prefs.getString("home_station", "Brixen / Bressanone") ?: "Brixen / Bressanone") }
+    var workStation by remember { mutableStateOf(prefs.getString("work_station", "Bozen / Bolzano") ?: "Bozen / Bolzano") }
+    var alarmCount by remember { mutableIntStateOf(prefs.getInt("alarm_train_count", 3)) }
+    val timer1Enabled = remember { mutableStateOf(prefs.getBoolean("timer_1_enabled", false)) }
+    val timer1Hour = remember { mutableIntStateOf(prefs.getInt("timer_1_hour", 7)) }
+    val timer1Minute = remember { mutableIntStateOf(prefs.getInt("timer_1_minute", 0)) }
+    val timer1Days = remember { mutableStateOf(prefs.getStringSet("timer_1_days", setOf("mon", "tue", "wed", "thu", "fri")) ?: setOf()) }
+    val timer2Enabled = remember { mutableStateOf(prefs.getBoolean("timer_2_enabled", false)) }
+    val timer2Hour = remember { mutableIntStateOf(prefs.getInt("timer_2_hour", 16)) }
+    val timer2Minute = remember { mutableIntStateOf(prefs.getInt("timer_2_minute", 0)) }
+    val timer2Days = remember { mutableStateOf(prefs.getStringSet("timer_2_days", setOf("mon", "tue", "wed", "thu", "fri")) ?: setOf()) }
+    
+    val categoryStates = remember {
+        mutableStateMapOf<String, Boolean>().apply {
+            MainActivity.CATEGORY_GROUPS.forEach { (_, filters) ->
+                filters.forEach { put(it.prefKey, prefs.getBoolean(it.prefKey, it.defaultState)) }
+            }
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f), shape = MaterialTheme.shapes.large) {
+            Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
+                Text("Einstellungen", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Heimatbahnhof", fontWeight = FontWeight.Bold)
+                StationSpinner(stationNames, homeStation) { homeStation = it }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Arbeitsbahnhof", fontWeight = FontWeight.Bold)
+                StationSpinner(stationNames, workStation) { workStation = it }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Anzahl Züge", fontWeight = FontWeight.Bold)
+                AlarmSpinner(alarmCount) { alarmCount = it }
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("Update-Zeiten", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                TimerSection("Morgens", timer1Enabled, timer1Hour, timer1Minute, timer1Days)
+                TimerSection("Nachmittags", timer2Enabled, timer2Hour, timer2Minute, timer2Days)
+                Spacer(modifier = Modifier.height(24.dp))
+                MainActivity.CATEGORY_GROUPS.forEach { (group, filters) ->
+                    Text(group, style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
+                    filters.forEach { filter ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = categoryStates[filter.prefKey] ?: filter.defaultState, onCheckedChange = { categoryStates[filter.prefKey] = it })
+                            Text(filter.label)
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onDismiss) { Text("Abbrechen") }
+                    Button(
+                        onClick = {
+                            if (homeStation == workStation) {
+                                Toast.makeText(context, "Stationen identisch!", Toast.LENGTH_SHORT).show()
+                            } else {
+                                prefs.edit {
+                                    putString("home_station", homeStation)
+                                    putString("work_station", workStation)
+                                    putInt("alarm_train_count", alarmCount)
+                                    putBoolean("timer_1_enabled", timer1Enabled.value)
+                                    putInt("timer_1_hour", timer1Hour.intValue)
+                                    putInt("timer_1_minute", timer1Minute.intValue)
+                                    putStringSet("timer_1_days", timer1Days.value)
+                                    putBoolean("timer_2_enabled", timer2Enabled.value)
+                                    putInt("timer_2_hour", timer2Hour.intValue)
+                                    putInt("timer_2_minute", timer2Minute.intValue)
+                                    putStringSet("timer_2_days", timer2Days.value)
+                                    categoryStates.forEach { (k, v) -> putBoolean(k, v) }
+                                }
+                                ScheduleHelper.scheduleAlarm(context, 1)
+                                ScheduleHelper.scheduleAlarm(context, 2)
+                                onDismiss()
+                                onFinish()
+                            }
+                        }
+                    ) {
+                        Text("Speichern")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TimerSection(label: String, enabled: MutableState<Boolean>, hour: MutableIntState, minute: MutableIntState, days: MutableState<Set<String>>) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = enabled.value, onCheckedChange = { enabled.value = it })
+            Text(label)
+        }
+        Button(onClick = { TimePickerDialog(context, { _, h, m -> hour.intValue = h; minute.intValue = m }, hour.intValue, minute.intValue, true).show() }, enabled = enabled.value, modifier = Modifier.padding(start = 32.dp) ) {
+            Text(String.format(Locale.ROOT, "%02d:%02d", hour.intValue, minute.intValue))
+        }
+        Row(modifier = Modifier.padding(start = 32.dp, top = 4.dp).horizontalScroll(rememberScrollState())) {
+            val keys = listOf("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+            val labels = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
+            keys.forEachIndexed { i, key ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
+                    Checkbox(checked = key in days.value, onCheckedChange = { checked -> if (checked) days.value += key else days.value -= key }, enabled = enabled.value)
+                    Text(labels[i], style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StationSpinner(options: List<String>, selected: String, onSelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(value = false) }
+    Box {
+        Text(text = selected, modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(8.dp).background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp))
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelected(option); expanded = false }) }
+        }
+    }
+}
+
+@Composable
+fun AlarmSpinner(selected: Int, onSelected: (Int) -> Unit) {
+    var expanded by remember { mutableStateOf(value = false) }
+    Box {
+        Text(text = "$selected Züge", modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(8.dp).background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp))
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            listOf(1, 2, 3).forEach { o -> DropdownMenuItem(text = { Text("$o Züge") }, onClick = { onSelected(o); expanded = false }) }
+        }
+    }
+}
+
+@Composable
+fun LocationStationDialog(detected: StationData, home: StationData, work: StationData, onTargetSelected: (StationData, StationData) -> Unit, onOtherTarget: (StationData, StationData) -> Unit, onCancel: () -> Unit, viewModel: TrainViewModel) {
+    val stations = viewModel.getSelectableRegionalStations()
+    val names = stations.map { it.name }
+    var from by remember { mutableStateOf(detected) }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Standort: ${detected.name.split("/").first().trim()}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column {
+                    Text("Abfahrt", fontWeight = FontWeight.Bold)
+                    StationSpinner(names, from.name) { n -> from = stations.first { it.name == n } }
+                }
+                
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onTargetSelected(from, work) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Nach ${work.name.split("/").first().trim()}")
+                    }
+                    
+                    Button(
+                        onClick = { onTargetSelected(from, home) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Nach ${home.name.split("/").first().trim()}")
+                    }
+                    
+                    OutlinedButton(
+                        onClick = { onOtherTarget(from, home) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Anderes Ziel...")
+                    }
+                }
+            }
+        },
+    confirmButton = {
+        TextButton(onClick = onCancel) {
+            Text("Abbrechen")
+        }
+    },
+)
+}
+
+@Composable
+fun CustomSearchDialog(from: StationData, to: StationData, onSearch: (StationData, StationData) -> Unit, onCancel: () -> Unit, viewModel: TrainViewModel) {
+    val stations = viewModel.getSelectableRegionalStations()
+    val names = stations.map { it.name }
+    var sFrom by remember { mutableStateOf(from) }
+    var sTo by remember { mutableStateOf(to) }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Route wählen") },
+        text = {
+            Column {
+            Text("Abfahrt", fontWeight = FontWeight.Bold)
+            StationSpinner(names, sFrom.name) { n -> sFrom = stations.first { it.name == n } }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Ziel", fontWeight = FontWeight.Bold)
+            StationSpinner(names, sTo.name) { n -> sTo = stations.first { it.name == n } }
+        }
+    },
+    confirmButton = {
+        Button(onClick = { onSearch(sFrom, sTo) }) {
+            Text("Suchen")
+        }
+    },
+    dismissButton = {
+        TextButton(onClick = onCancel) {
+            Text("Abbrechen")
+        }
+    }
+)
+}
+
+fun getTrainTypeLabel(cat: String): String {
+    val u = cat.uppercase()
+    return when {
+        u.contains("BUS") || u.contains("SEV") || u.contains("SOSTITUTIVO") -> "Ersatzbus"
+        u.startsWith("RV") || u.contains("REGIONALE VELOCE") || u.contains("REGIONAL-EXPRESS") -> "Regionalexpress"
+        u.startsWith("R ") || u.startsWith("REG") || u.contains("REGIONALE") -> "Regionalzug"
+        u.startsWith("EC") || u.startsWith("RJ") || u.contains("RAILJET") || u.contains("TRENORD") -> "Fernzug"
+        u.contains("FRECCIA") || u.contains("ITALO") -> "High-Speed"
+        else -> "Zug"
     }
 }

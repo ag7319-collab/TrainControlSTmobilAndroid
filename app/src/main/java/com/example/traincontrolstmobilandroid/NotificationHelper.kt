@@ -3,7 +3,9 @@ package com.example.traincontrolstmobilandroid
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.media.ToneGenerator
@@ -76,6 +78,18 @@ class NotificationHelper(private val context: Context) {
             .setPriority(if (isSilent) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
+
+        // Add Refresh Action
+        val refreshIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            putExtra("timer_index", 1) // Default to 1 for manual refresh
+        }
+        val refreshPendingIntent = PendingIntent.getBroadcast(
+            context,
+            0,
+            refreshIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        builder.addAction(android.R.drawable.ic_menu_rotate, "Aktualisieren", refreshPendingIntent)
 
         if (!isSilent) {
             builder.setDefaults(NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_LIGHTS)

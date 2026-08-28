@@ -34,6 +34,9 @@
             android:name=".AlarmReceiver"
             android:exported="false" />
         <receiver
+            android:name=".NotificationActionReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".BootReceiver"
             android:exported="true">
             <intent-filter>

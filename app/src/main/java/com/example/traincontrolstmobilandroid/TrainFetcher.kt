@@ -143,9 +143,31 @@ class TrainFetcher(context: Context) {
                         }
 
                         val mainLeg = vehicleLegs.firstOrNull() ?: continue
-                        val pointsArray = mainLeg.optJSONArray("point") ?: mainLeg.optJSONArray("points") ?: JSONArray()
+                        val pointsArray = mainLeg.optJSONArray("stopList") ?: mainLeg.optJSONArray("point") ?: mainLeg.optJSONArray("points") ?: JSONArray()
                         val points = List(pointsArray.length()) { pointsArray.getJSONObject(it) }
                         
+                        val stops = points.map { point ->
+                            val stopName = point.optString("name")
+                            val sTime = extractTime(point, listOf("itdTime", "dateTime", "departureTimePlanned", "time", "arrivalTimePlanned")) ?: ""
+                            val aTime = extractTime(point, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime", "arrivalTimeEstimated")) ?: sTime
+                            val cancelled = (point.optString("isCancelled") == "1") || point.optBoolean("isCancelled", false)
+                            
+                            var dStr = "pünktlich"
+                            if ((aTime != sTime) && sTime.isNotEmpty()) {
+                                val pLT = parseLocalTime(sTime)
+                                val aLT = parseLocalTime(aTime)
+                                if ((pLT != null) && (aLT != null)) {
+                                    val pT = (pLT.hour * 60) + pLT.minute
+                                    var rT = (aLT.hour * 60) + aLT.minute
+                                    if ((rT < pT) && ((pT - rT) > 720)) rT += 1440
+                                    val dM = rT - pT
+                                    if (dM > 0) dStr = "+$dM Min."
+                                }
+                            }
+                            if (cancelled) dStr = "entfällt"
+                            TrainStop(stopName, sTime, aTime, dStr, cancelled)
+                        }
+
                         val originNode = mainLeg.optJSONObject("origin") ?: points.firstOrNull { it.optString("usage") == "departure" } ?: points.firstOrNull()
                         val transpNode = mainLeg.optJSONObject("transportation") ?: mainLeg.optJSONObject("mode")
 
@@ -182,6 +204,7 @@ class TrainFetcher(context: Context) {
                             isBus = isErsatzBusMain,
                             stopsAtTarget = true,
                             lineTerminal = lineTerminal,
+                            stops = stops,
                         )
 
                         val idx = rawTrainList.size
@@ -326,7 +349,7 @@ class TrainFetcher(context: Context) {
     private fun calculateActualDepartureDateTime(
         planDate: String,
         planTime: String,
-        realTime: String?
+        realTime: String?,
     ): LocalDateTime {
         val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
         val date = try {
@@ -348,7 +371,7 @@ class TrainFetcher(context: Context) {
          * Wenn die Abfahrt eigentlich schon gestern war (oder heute sehr spät),
          * aber die Verspätung sie über Mitternacht schiebt.
          */
-        if (actualMinutes < plannedMinutes && (plannedMinutes - actualMinutes) > 720) {
+        if ((actualMinutes < plannedMinutes) && ((plannedMinutes - actualMinutes) > 720)) {
             actualDate = actualDate.plusDays(1)
         }
 

@@ -7,35 +7,35 @@
     <!-- Lupe Griff -->
     <path
         android:pathData="M70,70 L90,90"
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="#CE1126"
         android:strokeWidth="8"
         android:strokeLineCap="round" />
 
     <!-- Lupe Ring -->
     <path
         android:pathData="M50,50m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="#CE1126"
         android:strokeWidth="6" />
 
     <!-- Uhr Ziffernblatt (Hintergrund leicht transparent) -->
     <path
-        android:fillColor="#40FFFFFF"
+        android:fillColor="#40CE1126"
         android:pathData="M50,50m-24,0a24,24 0,1 1,48 0a24,24 0,1 1,-48 0" />
 
     <!-- Uhrzeiger -->
     <path
         android:pathData="M50,50 L50,30"
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="#CE1126"
         android:strokeWidth="4"
         android:strokeLineCap="round" />
     <path
         android:pathData="M50,50 L65,50"
-        android:strokeColor="#FFFFFF"
+        android:strokeColor="#CE1126"
         android:strokeWidth="4"
         android:strokeLineCap="round" />
 
     <!-- Mittelpunkt der Uhr -->
     <path
-        android:fillColor="#FFFFFF"
+        android:fillColor="#CE1126"
         android:pathData="M50,50m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
 </vector>

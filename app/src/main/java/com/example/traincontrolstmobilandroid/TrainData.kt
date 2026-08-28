@@ -1,5 +1,13 @@
 package com.example.traincontrolstmobilandroid
 
+data class TrainStop(
+    val name: String,
+    val scheduledTime: String,
+    val actualTime: String,
+    val delay: String,
+    val isCancelled: Boolean = false,
+)
+
 data class TrainInfo(
     val categoryNumber: String,
     val destination: String,
@@ -12,9 +20,10 @@ data class TrainInfo(
     val rfiDelay: String? = null,
     val rfiStatus: String? = null,
     val lineTerminal: String? = null,
+    val stops: List<TrainStop> = emptyList(),
 ) {
     val hasAnyDelay: Boolean
-        get() = hasDelay || rfiStatus == "Verspätung" || rfiStatus == "entfällt"
+        get() = hasDelay || (rfiStatus == "Verspätung") || (rfiStatus == "entfällt")
 
     val bestDelayInfo: String
         get() = when {
