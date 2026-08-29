@@ -534,17 +534,16 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
+        train.extraDelayInfoLong?.let { extra ->
+            Text(
+                text = extra,
+                color = if (train.hasAnyDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
         if (train.stopsAtTarget == false) {
             Text(text = "Hält NICHT in $shortTarget", color = Color.Red, style = MaterialTheme.typography.bodySmall)
-        }
-        if ((train.rfiStatus != null) || (train.rfiDelay != null)) {
-            val isCritical = (train.rfiStatus == "Verspätung") || (train.rfiStatus == "entfällt")
-            Text(
-                text = "RFI: ${train.rfiStatus ?: "pünktlich"} (${train.rfiDelay ?: "+0"})",
-                color = if (isCritical) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (isCritical) FontWeight.Bold else FontWeight.Normal
-            )
         }
     }
 }

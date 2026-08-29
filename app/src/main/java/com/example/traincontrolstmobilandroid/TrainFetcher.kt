@@ -284,6 +284,51 @@ class TrainFetcher(context: Context) {
                     println("DEBUG: RFI-Monitor Cross-Check failed: ${e.message}")
                 }
 
+                try {
+                    for ((i, train) in rawTrainList.withIndex()) {
+                        val num = train.categoryNumber.filter { it.isDigit() }
+                        if (num.isBlank()) continue
+
+                        withContext(Dispatchers.IO) {
+                            try {
+                                // 1. Suche Zug für ID
+                                val searchUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
+                                val searchRes = Jsoup.connect(searchUrl).ignoreContentType(true).timeout(5000).execute().body().trim()
+                                
+                                if (searchRes.isNotEmpty()) {
+                                    val parts = searchRes.split("|")
+                                    if (parts.size >= 2) {
+                                        val trainIdParts = parts[1].split("-")
+                                        if (trainIdParts.size >= 2) {
+                                            val number = trainIdParts[0]
+                                            val originId = trainIdParts[1]
+                                            
+                                            // 2. Andamento abfragen
+                                            val andamentoUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/andamentoTreno/$originId/$number"
+                                            val andamentoRes = Jsoup.connect(andamentoUrl).ignoreContentType(true).timeout(5000).execute().body()
+                                            val andamentoJson = JSONObject(andamentoRes)
+                                            
+                                            val ritardo = andamentoJson.optInt("ritardo", -999)
+                                            val isSopresso = andamentoJson.optBoolean("provvedimento", false) || 
+                                                             (andamentoJson.optInt("provvedimento", 0) != 0)
+
+                                            if (isSopresso) {
+                                                rawTrainList[i] = rawTrainList[i].copy(vtStatus = "entfällt", vtDelay = "")
+                                            } else if (ritardo != -999) {
+                                                val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
+                                                val vtStatus = if (ritardo > 0) "Verspätung" else "pünktlich"
+                                                rawTrainList[i] = rawTrainList[i].copy(vtDelay = vtDisplay, vtStatus = vtStatus)
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (_: Exception) { }
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("DEBUG: VT Cross-Check failed: ${e.message}")
+                }
+
             } catch (e: Exception) {
                 e.printStackTrace()
             }

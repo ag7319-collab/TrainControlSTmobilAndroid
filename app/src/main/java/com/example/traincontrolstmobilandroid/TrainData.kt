@@ -19,19 +19,45 @@ data class TrainInfo(
     val stopsAtTarget: Boolean? = null,
     val rfiDelay: String? = null,
     val rfiStatus: String? = null,
+    val vtDelay: String? = null,
+    val vtStatus: String? = null,
     val lineTerminal: String? = null,
     val stops: List<TrainStop> = emptyList(),
 ) {
     val hasAnyDelay: Boolean
-        get() = hasDelay || (rfiStatus == "Verspätung") || (rfiStatus == "entfällt")
+        get() = hasDelay || 
+                (rfiStatus == "Verspätung") || (rfiStatus == "entfällt") ||
+                (vtStatus == "Verspätung") || (vtStatus == "entfällt")
 
     val bestDelayInfo: String
-        get() = when {
-            hasDelay -> delay
-            rfiStatus == "entfällt" -> "RFI: entfällt"
-            rfiStatus == "Verspätung" -> "RFI: ${rfiDelay ?: "+?"}"
-            else -> delay
+        get() = "STA: $delay"
+
+    val extraDelayInfoLong: String?
+        get() = buildExtraInfo(rfiLabel = "Tabellone", vtLabel = "Viaggiatreno")
+
+    val extraDelayInfoShort: String?
+        get() = buildExtraInfo(rfiLabel = "Tab", vtLabel = "VT")
+
+    private fun buildExtraInfo(rfiLabel: String, vtLabel: String): String? = buildString {
+        val rfiText = when (rfiStatus) {
+            "entfällt" -> "entfällt"
+            "Verspätung" -> rfiDelay ?: "+?"
+            else -> rfiDelay
         }
+        if (rfiText != null) {
+            append("RFI: $rfiLabel ($rfiText)")
+        }
+
+        val vtText = when (vtStatus) {
+            "entfällt" -> "entfällt"
+            "Verspätung" -> vtDelay ?: "+?"
+            else -> vtDelay
+        }
+        if (vtText != null) {
+            if (isNotEmpty()) append(" | ")
+            append("$vtLabel ($vtText)")
+        }
+    }.takeIf { it.isNotEmpty() }
 }
 
 data class StationData(

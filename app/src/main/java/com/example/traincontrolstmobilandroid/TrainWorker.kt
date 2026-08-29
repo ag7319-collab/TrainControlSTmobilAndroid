@@ -72,8 +72,15 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
         if (delayedTrain != null) {
             notificationHelper.playSingleBeep()
+            val fullDelay = buildString {
+                append(delayedTrain.bestDelayInfo)
+                delayedTrain.extraDelayInfoShort?.let { extra ->
+                    append("\n")
+                    append(extra)
+                }
+            }
             notificationHelper.sendGarminNotification(
-                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: ${delayedTrain.bestDelayInfo}",
+                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: $fullDelay",
                 title = "⚠️ Zugverspätung",
             )
             kotlinx.coroutines.delay(1000.milliseconds)
