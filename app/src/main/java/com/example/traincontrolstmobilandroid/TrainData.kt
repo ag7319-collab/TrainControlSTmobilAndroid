@@ -22,6 +22,7 @@ data class TrainInfo(
     val vtDelay: String? = null,
     val vtStatus: String? = null,
     val lineTerminal: String? = null,
+    val planDate: String? = null,
     val stops: List<TrainStop> = emptyList(),
 ) {
     val hasAnyDelay: Boolean

@@ -2,9 +2,7 @@ package com.example.traincontrolstmobilandroid
 
 import android.content.Context
 import android.content.SharedPreferences
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
@@ -23,6 +21,7 @@ class TrainFetcher(context: Context) {
     ): List<TrainInfo> {
         val rawTrainList = mutableListOf<TrainInfo>()
         val limit = 10
+        val internalLimit = 25
 
         val allowBus = prefs.getBoolean("cat_bus", true)
         val allowReg = prefs.getBoolean("cat_reg", true)
@@ -189,7 +188,8 @@ class TrainFetcher(context: Context) {
                         val realTime = extractTime(originNode, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime")) ?: planTime
 
                         val actualDeparture = calculateActualDepartureDateTime(planDate, planTime, realTime)
-                        if (!actualDeparture.isAfter(now.minusMinutes(1))) continue
+                        // Be more lenient: keep trains from the last 75 minutes for cross-checking
+                        if (!actualDeparture.isAfter(now.minusMinutes(75))) continue
                         if (actualDeparture.isAfter(now.plusHours(5))) continue
 
                         if (rawTrainList.any { (it.categoryNumber == transpName) && (it.time == planTime) }) continue
@@ -204,6 +204,7 @@ class TrainFetcher(context: Context) {
                             isBus = isErsatzBusMain,
                             stopsAtTarget = true,
                             lineTerminal = lineTerminal,
+                            planDate = planDate,
                             stops = stops,
                         )
 
@@ -229,7 +230,7 @@ class TrainFetcher(context: Context) {
                             rawTrainList[idx] = rawTrainList[idx].copy(delay = "entfällt", hasDelay = true)
                         }
 
-                        if (rawTrainList.size >= limit) break
+                        if (rawTrainList.size >= internalLimit) break
                     }
                 }
 
@@ -285,45 +286,14 @@ class TrainFetcher(context: Context) {
                 }
 
                 try {
-                    for ((i, train) in rawTrainList.withIndex()) {
-                        val num = train.categoryNumber.filter { it.isDigit() }
-                        if (num.isBlank()) continue
-
-                        withContext(Dispatchers.IO) {
-                            try {
-                                // 1. Suche Zug für ID
-                                val searchUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
-                                val searchRes = Jsoup.connect(searchUrl).ignoreContentType(true).timeout(5000).execute().body().trim()
-                                
-                                if (searchRes.isNotEmpty()) {
-                                    val parts = searchRes.split("|")
-                                    if (parts.size >= 2) {
-                                        val trainIdParts = parts[1].split("-")
-                                        if (trainIdParts.size >= 2) {
-                                            val number = trainIdParts[0]
-                                            val originId = trainIdParts[1]
-                                            
-                                            // 2. Andamento abfragen
-                                            val andamentoUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/andamentoTreno/$originId/$number"
-                                            val andamentoRes = Jsoup.connect(andamentoUrl).ignoreContentType(true).timeout(5000).execute().body()
-                                            val andamentoJson = JSONObject(andamentoRes)
-                                            
-                                            val ritardo = andamentoJson.optInt("ritardo", -999)
-                                            val isSopresso = andamentoJson.optBoolean("provvedimento", false) || 
-                                                             (andamentoJson.optInt("provvedimento", 0) != 0)
-
-                                            if (isSopresso) {
-                                                rawTrainList[i] = rawTrainList[i].copy(vtStatus = "entfällt", vtDelay = "")
-                                            } else if (ritardo != -999) {
-                                                val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
-                                                val vtStatus = if (ritardo > 0) "Verspätung" else "pünktlich"
-                                                rawTrainList[i] = rawTrainList[i].copy(vtDelay = vtDisplay, vtStatus = vtStatus)
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (_: Exception) { }
-                        }
+                    coroutineScope {
+                        val updatedTrains = rawTrainList.map { train ->
+                            async(Dispatchers.IO) {
+                                fetchViaggiaTrenoUpdate(train)
+                            }
+                        }.awaitAll()
+                        rawTrainList.clear()
+                        rawTrainList.addAll(updatedTrains)
                     }
                 } catch (e: Exception) {
                     println("DEBUG: VT Cross-Check failed: ${e.message}")
@@ -337,7 +307,70 @@ class TrainFetcher(context: Context) {
             if (attempt == 1) delay(1.seconds)
         }
 
-        return rawTrainList.sortedBy { it.time }
+        // Final filtering: remove trains that have truly departed based on updated delay info
+        return rawTrainList.asSequence().filter { train ->
+            val bestRealTime = getBestRealTime(train) ?: train.time
+            val actual = calculateActualDepartureDateTime(
+                train.planDate ?: now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                train.time,
+                bestRealTime,
+            )
+            // Show trains until 2 minutes after their (possibly delayed) departure
+            actual.isAfter(now.minusMinutes(2))
+        }.sortedWith(compareBy({ it.planDate }, { it.time })).take(limit).toList()
+    }
+
+    private fun getBestRealTime(train: TrainInfo): String? {
+        // Find maximum delay from all sources
+        val vtMins = train.vtDelay?.filter { it.isDigit() }?.toIntOrNull() ?: -1
+        val rfiMins = train.rfiDelay?.filter { it.isDigit() }?.toIntOrNull() ?: -1
+        val efaMins = if (train.delay.startsWith("+")) train.delay.filter { it.isDigit() }.toIntOrNull() ?: -1 else -1
+
+        val maxDelay = maxOf(vtMins, rfiMins, efaMins)
+        if (maxDelay < 0) return null
+
+        val planned = parseLocalTime(train.time) ?: return null
+        return planned.plusMinutes(maxDelay.toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
+    }
+
+    private fun fetchViaggiaTrenoUpdate(train: TrainInfo): TrainInfo {
+        val num = train.categoryNumber.filter { it.isDigit() }
+        if (num.isBlank()) return train
+
+        try {
+            // 1. Suche Zug für ID
+            val searchUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
+            val searchRes = Jsoup.connect(searchUrl).ignoreContentType(true).timeout(5000).execute().body().trim()
+            
+            if (searchRes.isNotEmpty()) {
+                val parts = searchRes.split("|")
+                if (parts.size >= 2) {
+                    val trainIdParts = parts[1].split("-")
+                    if (trainIdParts.size >= 2) {
+                        val number = trainIdParts[0]
+                        val originId = trainIdParts[1]
+                        
+                        // 2. Andamento abfragen
+                        val andamentoUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/andamentoTreno/$originId/$number"
+                        val andamentoRes = Jsoup.connect(andamentoUrl).ignoreContentType(true).timeout(5000).execute().body()
+                        val andamentoJson = JSONObject(andamentoRes)
+                        
+                        val ritardo = andamentoJson.optInt("ritardo", -999)
+                        val isSopresso = andamentoJson.optBoolean("provvedimento", false) || 
+                                         (andamentoJson.optInt("provvedimento", 0) != 0)
+
+                        if (isSopresso) {
+                            return train.copy(vtStatus = "entfällt", vtDelay = "")
+                        } else if (ritardo != -999) {
+                            val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
+                            val vtStatus = if (ritardo > 0) "Verspätung" else "pünktlich"
+                            return train.copy(vtDelay = vtDisplay, vtStatus = vtStatus)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) { }
+        return train
     }
 
     private fun extractDate(node: JSONObject, keys: List<String>): String? {
