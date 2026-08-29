@@ -49,7 +49,11 @@ data class TrainInfo(
         }
 
         val vtText = when (vtStatus) {
-            "entfällt" -> "entfällt"
+            "entfällt" -> {
+                // Nur ausblenden, wenn STA oder RFI bereits "entfällt" anzeigen
+                if (delay == "entfällt" || rfiStatus == "entfällt") null 
+                else "entfällt"
+            }
             "Verspätung" -> vtDelay ?: "+?"
             else -> vtDelay
         }

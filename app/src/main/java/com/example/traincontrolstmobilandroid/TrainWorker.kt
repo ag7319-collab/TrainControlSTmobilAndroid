@@ -80,7 +80,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                 }
             }
             notificationHelper.sendGarminNotification(
-                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\nVerspätung: $fullDelay",
+                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\n$fullDelay",
                 title = "⚠️ Zugverspätung",
             )
             kotlinx.coroutines.delay(1000.milliseconds)

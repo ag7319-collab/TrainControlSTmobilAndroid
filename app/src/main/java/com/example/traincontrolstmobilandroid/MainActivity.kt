@@ -528,7 +528,7 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
             Spacer(modifier = Modifier.width(8.dp))
             val delayColor = if (train.hasAnyDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
             Text(
-                text = train.bestDelayInfo,
+                text = "| ${train.bestDelayInfo}",
                 color = delayColor,
                 fontWeight = if (train.hasAnyDelay) FontWeight.Bold else FontWeight.Normal,
                 style = MaterialTheme.typography.bodyMedium,
