@@ -238,7 +238,10 @@ class TrainFetcher(context: Context) {
                     val rfiUrl = "https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?placeId=${fromStation.placeId}&arrivals=False"
                     val rfiDoc = withContext(Dispatchers.IO) {
                         try {
-                            Jsoup.connect(rfiUrl).timeout(8000).userAgent("Mozilla/5.0").get()
+                            Jsoup.connect(rfiUrl)
+                                .timeout(10000)
+                                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+                                .get()
                         } catch (_: Exception) {
                             null
                         }
@@ -250,7 +253,22 @@ class TrainFetcher(context: Context) {
                             val efaNum = train.categoryNumber.filter { it.isDigit() }
                             if (efaNum.isBlank()) continue
 
-                            val matchedRow = rfiRows.firstOrNull { it.text().contains(efaNum) }
+                            // Robuster Abgleich: Erst nach Nummer, dann nach Zeit + Typ/Ziel
+                            var matchedRow = rfiRows.firstOrNull { it.text().contains(efaNum) }
+                            if (matchedRow == null) {
+                                // Fallback: Suche nach Zeile mit exakt der gleichen Abfahrtszeit
+                                matchedRow = rfiRows.firstOrNull { row ->
+                                    val rowText = row.text()
+                                    val hasTime = rowText.contains(train.time)
+                                    val hasType = rowText.contains("REG", ignoreCase = true) || 
+                                                  rowText.contains("RV", ignoreCase = true) ||
+                                                  row.select("img[alt*=REG], img[alt*=RV], img[alt*=Regionale]").isNotEmpty()
+                                    val hasDest = rowText.contains(train.destination.split("/").first().trim(), ignoreCase = true)
+                                    
+                                    hasTime && (hasType || hasDest)
+                                }
+                            }
+
                             if (matchedRow != null) {
                                 val cols = matchedRow.select("td")
                                 if (cols.size >= 5) {
@@ -264,13 +282,13 @@ class TrainFetcher(context: Context) {
 
                                         val statusText = when {
                                             isCancelled -> "entfällt"
-                                            (rawDelay.isBlank()) || (rawDelay == "0") -> "pünktlich"
+                                            (rawDelay.isBlank()) || (rawDelay == "0") || (rawDelay == "pünktlich") -> "pünktlich"
                                             else -> "Verspätung"
                                         }
 
                                         val delayDisplay = when {
                                             isCancelled -> ""
-                                            (rawDelay.isBlank()) || (rawDelay == "0") -> "+0"
+                                            (rawDelay.isBlank()) || (rawDelay == "0") || (rawDelay == "pünktlich") -> "+0"
                                             rawDelay.all { it.isDigit() } -> "+$rawDelay"
                                             else -> rawDelay
                                         }
@@ -340,7 +358,13 @@ class TrainFetcher(context: Context) {
         try {
             // 1. Suche Zug für ID
             val searchUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
-            val searchRes = Jsoup.connect(searchUrl).ignoreContentType(true).timeout(5000).execute().body().trim()
+            val searchRes = Jsoup.connect(searchUrl)
+                .ignoreContentType(true)
+                .timeout(5000)
+                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+                .execute()
+                .body()
+                .trim()
             
             if (searchRes.isNotEmpty()) {
                 val parts = searchRes.split("|")
@@ -352,7 +376,12 @@ class TrainFetcher(context: Context) {
                         
                         // 2. Andamento abfragen
                         val andamentoUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/andamentoTreno/$originId/$number"
-                        val andamentoRes = Jsoup.connect(andamentoUrl).ignoreContentType(true).timeout(5000).execute().body()
+                        val andamentoRes = Jsoup.connect(andamentoUrl)
+                            .ignoreContentType(true)
+                            .timeout(5000)
+                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+                            .execute()
+                            .body()
                         val andamentoJson = JSONObject(andamentoRes)
                         
                         val ritardo = andamentoJson.optInt("ritardo", -999)
