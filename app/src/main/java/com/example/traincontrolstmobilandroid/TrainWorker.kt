@@ -25,8 +25,8 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val workStation = allStations.firstOrNull { it.name == workStationName } ?: return@withContext Result.failure()
 
         val timerIndex = inputData.getInt("timer_index", 1)
-        val fromStation = if (timerIndex == 1) homeStation else workStation
-        val toStation = if (timerIndex == 1) workStation else homeStation
+        val fromStation = if ((timerIndex == 1) || (timerIndex == 3)) homeStation else workStation
+        val toStation = if ((timerIndex == 1) || (timerIndex == 3)) workStation else homeStation
 
         // Internet-Check vor der Abfrage
         if (!isNetworkAvailable()) {

@@ -16,7 +16,14 @@ object ScheduleHelper {
             return
         }
 
-        val hour = prefs.getInt("timer_${timerIndex}_hour", if (timerIndex == 1) 7 else 16)
+        val defaultHour = when (timerIndex) {
+            1 -> 7
+            3 -> 8
+            2 -> 16
+            4 -> 17
+            else -> 7
+        }
+        val hour = prefs.getInt("timer_${timerIndex}_hour", defaultHour)
         val minute = prefs.getInt("timer_${timerIndex}_minute", 0)
 
         val calendar = Calendar.getInstance().apply {

@@ -1,7 +1,6 @@
 package com.example.traincontrolstmobilandroid
 
 import android.Manifest
-import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -587,14 +586,26 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
     var homeStation by remember { mutableStateOf(prefs.getString("home_station", "Brixen / Bressanone") ?: "Brixen / Bressanone") }
     var workStation by remember { mutableStateOf(prefs.getString("work_station", "Bozen / Bolzano") ?: "Bozen / Bolzano") }
     var alarmCount by remember { mutableIntStateOf(prefs.getInt("alarm_train_count", 3)) }
+    
     val timer1Enabled = remember { mutableStateOf(prefs.getBoolean("timer_1_enabled", false)) }
     val timer1Hour = remember { mutableIntStateOf(prefs.getInt("timer_1_hour", 7)) }
     val timer1Minute = remember { mutableIntStateOf(prefs.getInt("timer_1_minute", 0)) }
     val timer1Days = remember { mutableStateOf(prefs.getStringSet("timer_1_days", setOf("mon", "tue", "wed", "thu", "fri")) ?: setOf()) }
+    
+    val timer3Enabled = remember { mutableStateOf(prefs.getBoolean("timer_3_enabled", false)) }
+    val timer3Hour = remember { mutableIntStateOf(prefs.getInt("timer_3_hour", 8)) }
+    val timer3Minute = remember { mutableIntStateOf(prefs.getInt("timer_3_minute", 0)) }
+    val timer3Days = remember { mutableStateOf(prefs.getStringSet("timer_3_days", setOf()) ?: setOf()) }
+
     val timer2Enabled = remember { mutableStateOf(prefs.getBoolean("timer_2_enabled", false)) }
     val timer2Hour = remember { mutableIntStateOf(prefs.getInt("timer_2_hour", 16)) }
     val timer2Minute = remember { mutableIntStateOf(prefs.getInt("timer_2_minute", 0)) }
     val timer2Days = remember { mutableStateOf(prefs.getStringSet("timer_2_days", setOf("mon", "tue", "wed", "thu", "fri")) ?: setOf()) }
+
+    val timer4Enabled = remember { mutableStateOf(prefs.getBoolean("timer_4_enabled", false)) }
+    val timer4Hour = remember { mutableIntStateOf(prefs.getInt("timer_4_hour", 17)) }
+    val timer4Minute = remember { mutableIntStateOf(prefs.getInt("timer_4_minute", 0)) }
+    val timer4Days = remember { mutableStateOf(prefs.getStringSet("timer_4_days", setOf()) ?: setOf()) }
     
     val categoryStates = remember {
         mutableStateMapOf<String, Boolean>().apply {
@@ -615,12 +626,15 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                 Text("Arbeitsbahnhof", fontWeight = FontWeight.Bold)
                 StationSpinner(stationNames, workStation) { workStation = it }
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Anzahl Züge", fontWeight = FontWeight.Bold)
+                Text("Verspätungen anzeigen", fontWeight = FontWeight.Bold)
                 AlarmSpinner(alarmCount) { alarmCount = it }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("Update-Zeiten", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 TimerSection("Morgens", timer1Enabled, timer1Hour, timer1Minute, timer1Days)
+                TimerSection("", timer3Enabled, timer3Hour, timer3Minute, timer3Days, showMasterCheckbox = false)
+                Spacer(modifier = Modifier.height(8.dp))
                 TimerSection("Nachmittags", timer2Enabled, timer2Hour, timer2Minute, timer2Days)
+                TimerSection("", timer4Enabled, timer4Hour, timer4Minute, timer4Days, showMasterCheckbox = false)
                 Spacer(modifier = Modifier.height(24.dp))
                 MainActivity.CATEGORY_GROUPS.forEach { (group, filters) ->
                     Text(group, style = MaterialTheme.typography.bodySmall, color = Color.Gray, modifier = Modifier.padding(top = 8.dp))
@@ -647,14 +661,24 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                                     putInt("timer_1_hour", timer1Hour.intValue)
                                     putInt("timer_1_minute", timer1Minute.intValue)
                                     putStringSet("timer_1_days", timer1Days.value)
+                                    putBoolean("timer_3_enabled", timer3Enabled.value)
+                                    putInt("timer_3_hour", timer3Hour.intValue)
+                                    putInt("timer_3_minute", timer3Minute.intValue)
+                                    putStringSet("timer_3_days", timer3Days.value)
                                     putBoolean("timer_2_enabled", timer2Enabled.value)
                                     putInt("timer_2_hour", timer2Hour.intValue)
                                     putInt("timer_2_minute", timer2Minute.intValue)
                                     putStringSet("timer_2_days", timer2Days.value)
+                                    putBoolean("timer_4_enabled", timer4Enabled.value)
+                                    putInt("timer_4_hour", timer4Hour.intValue)
+                                    putInt("timer_4_minute", timer4Minute.intValue)
+                                    putStringSet("timer_4_days", timer4Days.value)
                                     categoryStates.forEach { (k, v) -> putBoolean(k, v) }
                                 }
                                 ScheduleHelper.scheduleAlarm(context, 1)
+                                ScheduleHelper.scheduleAlarm(context, 3)
                                 ScheduleHelper.scheduleAlarm(context, 2)
+                                ScheduleHelper.scheduleAlarm(context, 4)
                                 onDismiss()
                                 onFinish()
                             }
@@ -668,15 +692,51 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimerSection(label: String, enabled: MutableState<Boolean>, hour: MutableIntState, minute: MutableIntState, days: MutableState<Set<String>>) {
-    val context = LocalContext.current
-    Column(modifier = Modifier.padding(vertical = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = enabled.value, onCheckedChange = { enabled.value = it })
-            Text(label)
+fun TimerSection(
+    label: String,
+    enabled: MutableState<Boolean>,
+    hour: MutableIntState,
+    minute: MutableIntState,
+    days: MutableState<Set<String>>,
+    showMasterCheckbox: Boolean = true
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    if (showDialog) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = hour.intValue,
+            initialMinute = minute.intValue,
+            is24Hour = true
+        )
+        Material3TimePickerDialog(
+            onDismiss = { showDialog = false },
+            onConfirm = {
+                hour.intValue = timePickerState.hour
+                minute.intValue = timePickerState.minute
+                showDialog = false
+            }
+        ) {
+            TimePicker(state = timePickerState)
         }
-        Button(onClick = { TimePickerDialog(context, { _, h, m -> hour.intValue = h; minute.intValue = m }, hour.intValue, minute.intValue, true).show() }, enabled = enabled.value, modifier = Modifier.padding(start = 32.dp) ) {
+    }
+
+    val isActuallyEnabled = if (showMasterCheckbox) enabled.value else true
+
+    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+        if (showMasterCheckbox) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = enabled.value, onCheckedChange = { enabled.value = it })
+                Text(label)
+            }
+        }
+        
+        Button(
+            onClick = { showDialog = true },
+            enabled = isActuallyEnabled,
+            modifier = Modifier.padding(start = 32.dp)
+        ) {
             Text(String.format(Locale.ROOT, "%02d:%02d", hour.intValue, minute.intValue))
         }
         Row(modifier = Modifier.padding(start = 32.dp, top = 4.dp).horizontalScroll(rememberScrollState())) {
@@ -684,12 +744,47 @@ fun TimerSection(label: String, enabled: MutableState<Boolean>, hour: MutableInt
             val labels = listOf("Mo", "Di", "Mi", "Do", "Fr", "Sa", "So")
             keys.forEachIndexed { i, key ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-                    Checkbox(checked = key in days.value, onCheckedChange = { checked -> if (checked) days.value += key else days.value -= key }, enabled = enabled.value)
+                    Checkbox(
+                        checked = key in days.value,
+                        onCheckedChange = { checked ->
+                            if (checked) days.value += key else days.value -= key
+                            if (!showMasterCheckbox) {
+                                enabled.value = days.value.isNotEmpty()
+                            }
+                        },
+                        enabled = isActuallyEnabled
+                    )
                     Text(labels[i], style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
     }
+}
+
+@Composable
+fun Material3TimePickerDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Abbrechen")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("OK")
+            }
+        },
+        text = {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                content()
+            }
+        }
+    )
 }
 
 @Composable
@@ -706,10 +801,19 @@ fun StationSpinner(options: List<String>, selected: String, onSelected: (String)
 @Composable
 fun AlarmSpinner(selected: Int, onSelected: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(value = false) }
+    val options = listOf(
+        1 to "des nächsten Zuges",
+        2 to "der nächsten 2 Züge",
+        3 to "der nächsten 3 Züge"
+    )
+    val selectedLabel = options.find { it.first == selected }?.second ?: "$selected Züge"
+    
     Box {
-        Text(text = "$selected Züge", modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(8.dp).background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp))
+        Text(text = selectedLabel, modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(8.dp).background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp))
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf(1, 2, 3).forEach { o -> DropdownMenuItem(text = { Text("$o Züge") }, onClick = { onSelected(o); expanded = false }) }
+            options.forEach { (value, label) -> 
+                DropdownMenuItem(text = { Text(label) }, onClick = { onSelected(value); expanded = false }) 
+            }
         }
     }
 }
