@@ -28,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -355,6 +356,7 @@ fun TrainApp(
                     onOpenSettings = { viewModel.openSettings() },
                     onFinish = onFinish,
                     onChangeStation = { viewModel.showCustomSearch(state.from, state.to) },
+                    onRefresh = { viewModel.fetchTrains(state.from, state.to) },
                 ) {
                     viewModel.selectTrain(it)
                 }
@@ -424,6 +426,7 @@ fun ResultsScreen(
     onOpenSettings: () -> Unit,
     onFinish: () -> Unit,
     onChangeStation: () -> Unit,
+    onRefresh: () -> Unit,
     onTrainClick: (TrainInfo) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -456,10 +459,23 @@ fun ResultsScreen(
                 }
             }
         }
-        Button(
-            onClick = onFinish,
-            modifier = Modifier.align(Alignment.End).padding(top = 8.dp)
-        ) { Text("OK") }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onRefresh) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Aktualisieren",
+                    tint = MainActivity.Landtagsrot
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = onFinish) {
+                Text("OK")
+            }
+        }
     }
 }
 
