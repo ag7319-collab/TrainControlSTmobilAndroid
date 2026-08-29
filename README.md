@@ -17,9 +17,9 @@ Die App erkennt dabei automatisch über GPS, ob sich der Nutzer am "Heimat-Bahnh
 *   **Detaillierte Filter:** Auswahlmöglichkeit zwischen Regionalzügen, Fernverkehr (Frecciarossa, Italo, RJ) und Schienenersatzverkehr (Bus).
 
 ## Datenquelle
-Die Anwendung kombiniert Daten aus zwei Quellen:
+Die Anwendung kombiniert Daten aus 3 Quellen:
 1.  **Südtirol Mobil (EFA):** Grundlegende Fahrplandaten und offizielle Echtzeit-Informationen der STA.
-2.  **RFI (Rete Ferroviaria Italiana):** Zusätzliche Abfrage der offiziellen italienischen Bahn-Monitore (ViaggiaTreno/IecHub), um eine höhere Genauigkeit bei Verspätungsangaben auf dem staatlichen Schienennetz zu erreichen.
+2.  **RFI (Rete Ferroviaria Italiana):** Zusätzliche Abfrage der offiziellen italienischen Bahn-Monitore und züber Viaggiatreno (ViaggiaTreno/IecHub), um eine höhere Genauigkeit bei Verspätungsangaben auf dem staatlichen Schienennetz zu erreichen.
 
 ## Installation & Start
 1.  **Repository klonen:**
