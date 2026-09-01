@@ -67,7 +67,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val alarmTrainCount = prefs.getInt("alarm_train_count", 3)
 
         val delayedTrain = relevantTrains.asSequence().take(alarmTrainCount).firstOrNull {
-            it.hasAnyDelay
+            it.isCancelled || it.maxDelayMinutes >= 6
         }
 
         if (delayedTrain != null) {

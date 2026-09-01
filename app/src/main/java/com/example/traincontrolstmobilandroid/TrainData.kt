@@ -26,9 +26,19 @@ data class TrainInfo(
     val stops: List<TrainStop> = emptyList(),
 ) {
     val hasAnyDelay: Boolean
-        get() = hasDelay || 
-                (rfiStatus == "Verspätung") || (rfiStatus == "entfällt") ||
-                (vtStatus == "Verspätung") || (vtStatus == "entfällt")
+        get() = isCancelled || maxDelayMinutes > 0
+
+    val isCancelled: Boolean
+        get() = (delay == "entfällt") || (rfiStatus == "entfällt") || (vtStatus == "entfällt")
+
+    val maxDelayMinutes: Int
+        get() {
+            fun parse(s: String?): Int {
+                if (s == null || s.contains("-")) return 0 
+                return s.filter { it.isDigit() }.toIntOrNull() ?: 0
+            }
+            return maxOf(parse(delay), maxOf(parse(rfiDelay), parse(vtDelay)))
+        }
 
     val bestDelayInfo: String
         get() = "STA: $delay"
