@@ -356,37 +356,46 @@ class TrainFetcher(context: Context) {
         if (num.isBlank()) return train
 
         try {
-            // 1. Suche Zug für ID
-            val searchUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
+            // 1. Suche Zug für ID (Logik aus TreniRT: verwende infomobilita Endpoint)
+            val searchUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
             val searchRes = Jsoup.connect(searchUrl)
                 .ignoreContentType(true)
-                .timeout(5000)
+                .timeout(10000)
                 .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
                 .execute()
                 .body()
                 .trim()
             
             if (searchRes.isNotEmpty()) {
-                val parts = searchRes.split("|")
+                // TreniRT parsing logic: nimm die erste valide Zeile
+                val line = searchRes.lines().firstOrNull { it.contains("|") } ?: return train
+                val parts = line.split("|")
                 if (parts.size >= 2) {
-                    val trainIdParts = parts[1].split("-")
-                    if (trainIdParts.size >= 2) {
-                        val number = trainIdParts[0]
-                        val originId = trainIdParts[1]
+                    val meta = parts[1]
+                    val metaParts = meta.split("-")
+                    val trainNum = metaParts.getOrNull(0)?.trim() ?: ""
+                    val originId = metaParts.getOrNull(1)?.trim() ?: ""
+                    val referenceDay = metaParts.getOrNull(2)?.trim() ?: "" // Midnight-Timestamp
+                    
+                    if (trainNum.isNotEmpty() && originId.isNotEmpty()) {
+                        // 2. Andamento abfragen (mit referenceDay zur Disambiguierung)
+                        val andamentoUrl = if (referenceDay.isNotEmpty()) {
+                            "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum/$referenceDay"
+                        } else {
+                            "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum"
+                        }
                         
-                        // 2. Andamento abfragen
-                        val andamentoUrl = "http://www.viaggiatreno.it/viaggiatrenonew/resteasy/viaggiatreno/andamentoTreno/$originId/$number"
                         val andamentoRes = Jsoup.connect(andamentoUrl)
                             .ignoreContentType(true)
-                            .timeout(5000)
+                            .timeout(10000)
                             .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
                             .execute()
                             .body()
-                        val andamentoJson = JSONObject(andamentoRes)
                         
+                        val andamentoJson = JSONObject(andamentoRes)
                         val ritardo = andamentoJson.optInt("ritardo", -999)
-                        val isSopresso = andamentoJson.optBoolean("provvedimento", false) || 
-                                         (andamentoJson.optInt("provvedimento", 0) != 0)
+                        val provvedimento = andamentoJson.optInt("provvedimento", 0)
+                        val isSopresso = (provvedimento != 0) || andamentoJson.optBoolean("provvedimento", false)
 
                         if (isSopresso) {
                             return train.copy(vtStatus = "entfällt", vtDelay = "")
