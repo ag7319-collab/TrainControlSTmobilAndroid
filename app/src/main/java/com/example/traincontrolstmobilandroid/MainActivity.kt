@@ -562,7 +562,7 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.width(8.dp))
-            val delayColor = if (train.hasAnyDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+            val staColor = if (train.hasDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
             val displayDelay = if (train.platform.length > 1) {
                 train.bestDelayInfo.replace("pünktlich", "pünktl.")
             } else {
@@ -570,18 +570,38 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
             }
             Text(
                 text = "| $displayDelay",
-                color = delayColor,
-                fontWeight = if (train.hasAnyDelay) FontWeight.Bold else FontWeight.Normal,
+                color = staColor,
+                fontWeight = if (train.hasDelay) FontWeight.Bold else FontWeight.Normal,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        train.extraDelayInfoLong?.let { extra ->
-            Text(
-                text = extra,
-                color = if (train.hasAnyDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+        
+        val rfiText = train.getRfiDisplay("Tabellone")
+        val vtText = train.getVtDisplay("Viaggiatreno")
+        
+        if (rfiText != null || vtText != null) {
+            FlowRow(
+                modifier = Modifier.padding(top = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (rfiText != null) {
+                    Text(
+                        text = rfiText,
+                        color = if (train.isRfiDelayed) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+                if (rfiText != null && vtText != null) {
+                    Text(text = "|", color = Color.Gray, style = MaterialTheme.typography.labelSmall)
+                }
+                if (vtText != null) {
+                    Text(
+                        text = vtText,
+                        color = if (train.isVtDelayed) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
         }
         if (train.stopsAtTarget == false) {
             Text(text = "Hält NICHT in $shortTarget", color = Color.Red, style = MaterialTheme.typography.bodySmall)

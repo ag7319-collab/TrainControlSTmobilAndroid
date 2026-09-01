@@ -31,6 +31,12 @@ data class TrainInfo(
     val isCancelled: Boolean
         get() = (delay == "entfällt") || (rfiStatus == "entfällt") || (vtStatus == "entfällt")
 
+    val isRfiDelayed: Boolean
+        get() = (rfiStatus == "Verspätung") || (rfiStatus == "entfällt")
+
+    val isVtDelayed: Boolean
+        get() = (vtStatus == "Verspätung") || (vtStatus == "entfällt")
+
     val maxDelayMinutes: Int
         get() {
             fun parse(s: String?): Int {
@@ -42,6 +48,27 @@ data class TrainInfo(
 
     val bestDelayInfo: String
         get() = "STA: $delay"
+
+    fun getRfiDisplay(label: String): String? {
+        val text = when (rfiStatus) {
+            "entfällt" -> "entfällt"
+            "Verspätung" -> rfiDelay ?: "+?"
+            else -> rfiDelay
+        }
+        return if (text != null) "RFI: $label ($text)" else null
+    }
+
+    fun getVtDisplay(label: String): String? {
+        val text = when (vtStatus) {
+            "entfällt" -> {
+                if (delay == "entfällt" || rfiStatus == "entfällt") null 
+                else "entfällt"
+            }
+            "Verspätung" -> vtDelay ?: "+?"
+            else -> vtDelay
+        }
+        return if (text != null) "$label ($text)" else null
+    }
 
     val extraDelayInfoLong: String?
         get() = buildExtraInfo(rfiLabel = "Tabellone", vtLabel = "Viaggiatreno")
