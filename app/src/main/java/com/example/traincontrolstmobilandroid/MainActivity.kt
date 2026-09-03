@@ -153,7 +153,7 @@ fun BatteryOptimizationDialog(onDismiss: () -> Unit) {
 }
 
 sealed class UIState {
-    object Loading : UIState()
+    data class Loading(val message: String = "") : UIState()
     data class Results(val from: StationData, val to: StationData, val trains: List<TrainInfo>) : UIState()
     data class LocationSelection(val detected: StationData, val home: StationData, val work: StationData) : UIState()
     data class CustomSearch(val from: StationData, val to: StationData) : UIState()
@@ -165,7 +165,7 @@ class TrainViewModel(
     private val appContext: Context,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow<UIState>(UIState.Loading)
+    private val _uiState = MutableStateFlow<UIState>(UIState.Loading())
     val uiState: StateFlow<UIState> = _uiState.asStateFlow()
 
     private val _showSettings = MutableStateFlow(value = false)
@@ -250,10 +250,12 @@ class TrainViewModel(
     }
 
     fun fetchTrains(from: StationData, to: StationData) {
-        _uiState.value = UIState.Loading
+        _uiState.value = UIState.Loading()
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val trains = trainFetcher.fetchAndParseTrains(from, to)
+                val trains = trainFetcher.fetchAndParseTrains(from, to) { msg ->
+                    _uiState.value = UIState.Loading(msg)
+                }
                 _uiState.value = UIState.Results(from, to, trains)
             } catch (_: Exception) {
                 _uiState.value = UIState.Results(from, to, emptyList())
@@ -370,7 +372,7 @@ fun TrainApp(
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (val state = uiState) {
-                is UIState.Loading -> LoadingScreen()
+                is UIState.Loading -> LoadingScreen(state.message)
                 is UIState.Results -> ResultsScreen(
                     state.from, state.to, state.trains,
                     onOpenSettings = { viewModel.openSettings() },
@@ -414,7 +416,7 @@ fun TrainApp(
 }
 
 @Composable
-fun LoadingScreen() {
+fun LoadingScreen(message: String = "") {
     Column(
         modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         verticalArrangement = Arrangement.Center,
@@ -435,6 +437,15 @@ fun LoadingScreen() {
             color = Color.Gray,
             fontSize = 14.sp,
         )
+        if (message.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "> $message",
+                color = Color.LightGray,
+                fontSize = 11.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+            )
+        }
     }
 }
 

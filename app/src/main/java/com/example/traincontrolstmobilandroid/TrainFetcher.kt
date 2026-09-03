@@ -18,6 +18,7 @@ class TrainFetcher(context: Context) {
     suspend fun fetchAndParseTrains(
         fromStation: StationData,
         targetStation: StationData,
+        onProgress: (String) -> Unit = {}
     ): List<TrainInfo> {
         val rawTrainList = mutableListOf<TrainInfo>()
         val limit = 10
@@ -43,6 +44,7 @@ class TrainFetcher(context: Context) {
                 val queryOffsets = listOf(60L, 0L)
 
                 for (offset in queryOffsets) {
+                    onProgress("Abfrage EFA (STA)")
                     val queryStart = now.minusMinutes(offset)
                     val dateStr = queryStart.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                     val timeStr = queryStart.format(DateTimeFormatter.ofPattern("HHmm"))
@@ -235,6 +237,7 @@ class TrainFetcher(context: Context) {
                 }
 
                 try {
+                    onProgress("Abfrage RFI Tabellone")
                     val rfiUrl = "https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?placeId=${fromStation.placeId}&arrivals=False"
                     val rfiDoc = withContext(Dispatchers.IO) {
                         try {
@@ -304,6 +307,7 @@ class TrainFetcher(context: Context) {
                 }
 
                 try {
+                    onProgress("Abfrage viaggiatreno.it")
                     coroutineScope {
                         val updatedTrains = rawTrainList.map { train ->
                             async(Dispatchers.IO) {
