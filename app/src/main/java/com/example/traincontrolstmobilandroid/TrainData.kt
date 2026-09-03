@@ -1,12 +1,38 @@
 package com.example.traincontrolstmobilandroid
 
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+
 data class TrainStop(
     val name: String,
     val scheduledTime: String,
     val actualTime: String,
     val delay: String,
     val isCancelled: Boolean = false,
-)
+) {
+    fun getEffectiveTime(trainMaxDelay: Int): String {
+        if (isCancelled) return scheduledTime
+        val planned = try {
+            LocalTime.parse(scheduledTime, DateTimeFormatter.ofPattern("HH:mm"))
+        } catch (_: Exception) {
+            return actualTime
+        }
+        val efaMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
+        val effectiveMins = maxOf(efaMins, trainMaxDelay)
+        return if (effectiveMins > 0) {
+            planned.plusMinutes(effectiveMins.toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
+        } else {
+            scheduledTime
+        }
+    }
+
+    fun getEffectiveDelay(trainMaxDelay: Int): String {
+        if (isCancelled) return "entfällt"
+        val efaMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
+        val effectiveMins = maxOf(efaMins, trainMaxDelay)
+        return if (effectiveMins > 0) "+$effectiveMins Min." else "pünktlich"
+    }
+}
 
 data class TrainInfo(
     val categoryNumber: String,
@@ -25,9 +51,6 @@ data class TrainInfo(
     val planDate: String? = null,
     val stops: List<TrainStop> = emptyList(),
 ) {
-    val hasAnyDelay: Boolean
-        get() = isCancelled || maxDelayMinutes > 0
-
     val isCancelled: Boolean
         get() = (delay == "entfällt") || (rfiStatus == "entfällt") || (vtStatus == "entfällt")
 
@@ -40,7 +63,7 @@ data class TrainInfo(
     val maxDelayMinutes: Int
         get() {
             fun parse(s: String?): Int {
-                if (s == null || s.contains("-")) return 0 
+                if (s == null || s.contains("-")) return 0
                 return s.filter { it.isDigit() }.toIntOrNull() ?: 0
             }
             return maxOf(parse(delay), maxOf(parse(rfiDelay), parse(vtDelay)))
@@ -55,7 +78,7 @@ data class TrainInfo(
             "Verspätung" -> rfiDelay ?: "+?"
             else -> rfiDelay
         }
-        return if (text != null) "RFI: $label ($text)" else null
+        return text?.let { "RFI: $label ($it)" }
     }
 
     fun getVtDisplay(label: String): String? {
@@ -67,39 +90,33 @@ data class TrainInfo(
             "Verspätung" -> vtDelay ?: "+?"
             else -> vtDelay
         }
-        return if (text != null) "$label ($text)" else null
+        return text?.let { "$label ($it)" }
     }
 
-    val extraDelayInfoLong: String?
-        get() = buildExtraInfo(rfiLabel = "Tabellone", vtLabel = "Viaggiatreno")
-
     val extraDelayInfoShort: String?
-        get() = buildExtraInfo(rfiLabel = "Tab", vtLabel = "VT")
-
-    private fun buildExtraInfo(rfiLabel: String, vtLabel: String): String? = buildString {
-        val rfiText = when (rfiStatus) {
-            "entfällt" -> "entfällt"
-            "Verspätung" -> rfiDelay ?: "+?"
-            else -> rfiDelay
-        }
-        if (rfiText != null) {
-            append("RFI: $rfiLabel ($rfiText)")
-        }
-
-        val vtText = when (vtStatus) {
-            "entfällt" -> {
-                // Nur ausblenden, wenn STA oder RFI bereits "entfällt" anzeigen
-                if (delay == "entfällt" || rfiStatus == "entfällt") null 
-                else "entfällt"
+        get() = buildString {
+            val rfiText = when (rfiStatus) {
+                "entfällt" -> "entfällt"
+                "Verspätung" -> rfiDelay ?: "+?"
+                else -> rfiDelay
             }
-            "Verspätung" -> vtDelay ?: "+?"
-            else -> vtDelay
-        }
-        if (vtText != null) {
-            if (isNotEmpty()) append(" | ")
-            append("$vtLabel ($vtText)")
-        }
-    }.takeIf { it.isNotEmpty() }
+            if (rfiText != null) {
+                append("RFI: Tab ($rfiText)")
+            }
+
+            val vtText = when (vtStatus) {
+                "entfällt" -> {
+                    if (delay == "entfällt" || rfiStatus == "entfällt") null 
+                    else "entfällt"
+                }
+                "Verspätung" -> vtDelay ?: "+?"
+                else -> vtDelay
+            }
+            if (vtText != null) {
+                if (isNotEmpty()) append(" | ")
+                append("VT ($vtText)")
+            }
+        }.takeIf { it.isNotEmpty() }
 }
 
 data class StationData(

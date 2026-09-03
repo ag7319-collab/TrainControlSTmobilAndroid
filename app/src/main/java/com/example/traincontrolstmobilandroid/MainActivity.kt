@@ -19,11 +19,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.magnifier
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -34,12 +36,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -524,7 +529,28 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
     
     val shortTarget = target.name.split("/").first().trim()
 
-    Column(modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(4.dp)) {
+    var magnifierCenter by remember { mutableStateOf(value = Offset.Unspecified) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { magnifierCenter = it },
+                    onDrag = { change, _ -> magnifierCenter = change.position },
+                    onDragEnd = { magnifierCenter = Offset.Unspecified },
+                    onDragCancel = { magnifierCenter = Offset.Unspecified }
+                )
+            }
+            .magnifier(
+                sourceCenter = { magnifierCenter },
+                zoom = 3f,
+                magnifierCenter = { magnifierCenter - Offset(0f, 100f) },
+                size = DpSize(width = 240.dp, height = 120.dp)
+            )
+            .clickable { onClick() }
+            .padding(4.dp)
+    ) {
         Text(text = "1. n. $cleanCat, ${getTrainTypeLabel(train.categoryNumber)}", style = MaterialTheme.typography.bodySmall)
         
         FlowRow(
@@ -638,9 +664,11 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
                             Text(text = "Geplant: ${stop.scheduledTime}", style = MaterialTheme.typography.bodySmall)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            val color = if ((stop.isCancelled) || (stop.delay != "pünktlich")) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
-                            Text(text = stop.actualTime, color = color, fontWeight = FontWeight.Bold)
-                            Text(text = stop.delay, color = color, style = MaterialTheme.typography.labelSmall)
+                            val effTime = stop.getEffectiveTime(train.maxDelayMinutes)
+                            val effDelay = stop.getEffectiveDelay(train.maxDelayMinutes)
+                            val color = if ((stop.isCancelled) || (effDelay != "pünktlich")) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+                            Text(text = effTime, color = color, fontWeight = FontWeight.Bold)
+                            Text(text = effDelay, color = color, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     HorizontalDivider()

@@ -18,7 +18,7 @@ class TrainFetcher(context: Context) {
     suspend fun fetchAndParseTrains(
         fromStation: StationData,
         targetStation: StationData,
-        onProgress: (String) -> Unit = {}
+        onProgress: (String) -> Unit = {},
     ): List<TrainInfo> {
         val rawTrainList = mutableListOf<TrainInfo>()
         val limit = 10
