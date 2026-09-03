@@ -563,16 +563,19 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
             }
         }
         
-        Row {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(
-                text = "${train.time} Uhr ",
+                text = "${train.time} Uhr",
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
                 text = if (train.isBus) "Bus" else "Gleis ${train.platform}",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(modifier = Modifier.width(8.dp))
+            
             val staColor = if (train.hasDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
             val displayDelay = if (train.platform.length > 1) {
                 train.bestDelayInfo.replace("pünktlich", "pünktl.")
