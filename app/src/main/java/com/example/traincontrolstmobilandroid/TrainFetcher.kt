@@ -6,8 +6,10 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.seconds
 
@@ -55,7 +57,7 @@ class TrainFetcher(context: Context) {
                             "&name_destination=$efaToId&type_destination=stop" +
                             "&itdDate=$dateStr&itdTime=$timeStr" +
                             "&useRealtime=1&outputFormat=JSON&language=de" +
-                            "&odvMacro=true&ptOptionsActive=1&itOptionsActive=1" +
+                            "&odvMacro=true&ptOptionsActive=1&itOptionsActive=1&includeAllRestops=1" +
                             "&inclMOT_0=1&inclMOT_1=1&inclMOT_2=1&inclMOT_3=1" +
                             "&inclMOT_4=0&inclMOT_5=0&inclMOT_6=0&inclMOT_7=0" +
                             "&inclMOT_8=0&inclMOT_9=0&inclMOT_10=0&inclMOT_11=0" +
@@ -144,6 +146,9 @@ class TrainFetcher(context: Context) {
                         }
 
                         val mainLeg = vehicleLegs.firstOrNull() ?: continue
+                        val journeyId = mainLeg.optJSONObject("transportation")?.optJSONObject("properties")?.optString("uniqueRID")
+                            ?: mainLeg.optJSONObject("transportation")?.optString("journeyId")
+                        
                         val pointsArray = mainLeg.optJSONArray("stopList") ?: mainLeg.optJSONArray("point") ?: mainLeg.optJSONArray("points") ?: JSONArray()
                         val points = List(pointsArray.length()) { pointsArray.getJSONObject(it) }
                         
@@ -155,8 +160,8 @@ class TrainFetcher(context: Context) {
                             
                             var dStr = "pünktlich"
                             if ((aTime != sTime) && sTime.isNotEmpty()) {
-                                val pLT = parseLocalTime(sTime)
-                                val aLT = parseLocalTime(aTime)
+                                val pLT = TrainInfo.parseLocalTime(sTime)
+                                val aLT = TrainInfo.parseLocalTime(aTime)
                                 if ((pLT != null) && (aLT != null)) {
                                     val pT = (pLT.hour * 60) + pLT.minute
                                     var rT = (aLT.hour * 60) + aLT.minute
@@ -180,6 +185,9 @@ class TrainFetcher(context: Context) {
                         val lineTerminal = transpNode.optJSONObject("destination")?.optString("name")
                             ?: transpNode.optString("destination").takeIf { it.isNotEmpty() }
                             ?: targetStation.name
+                        
+                        val lineOrigin = transpNode.optJSONObject("origin")?.optString("name")
+                            ?: transpNode.optString("origin").takeIf { it.isNotEmpty() }
 
                         val upperCat = transpName.uppercase()
                         val isErsatzBusMain = upperCat.contains("BUS") || upperCat.contains("SEV") || upperCat.contains("SOSTITUTIVO")
@@ -189,7 +197,7 @@ class TrainFetcher(context: Context) {
 
                         val realTime = extractTime(originNode, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime")) ?: planTime
 
-                        val actualDeparture = calculateActualDepartureDateTime(planDate, planTime, realTime)
+                        val actualDeparture = TrainInfo.calculateActualDateTime(planDate, planTime, realTime)
                         // Be more lenient: keep trains from the last 75 minutes for cross-checking
                         if (!actualDeparture.isAfter(now.minusMinutes(75))) continue
                         if (actualDeparture.isAfter(now.plusHours(5))) continue
@@ -205,8 +213,10 @@ class TrainFetcher(context: Context) {
                             hasDelay = false,
                             isBus = isErsatzBusMain,
                             stopsAtTarget = true,
+                            lineOrigin = lineOrigin,
                             lineTerminal = lineTerminal,
                             planDate = planDate,
+                            uniqueRID = journeyId,
                             stops = stops,
                         )
 
@@ -214,8 +224,8 @@ class TrainFetcher(context: Context) {
                         rawTrainList.add(trainInfo)
 
                         if (realTime != planTime) {
-                            val plannedLocalTime = parseLocalTime(planTime)
-                            val actualLocalTime = parseLocalTime(realTime)
+                            val plannedLocalTime = TrainInfo.parseLocalTime(planTime)
+                            val actualLocalTime = TrainInfo.parseLocalTime(realTime)
                             if ((plannedLocalTime != null) && (actualLocalTime != null)) {
                                 val pTotal = (plannedLocalTime.hour * 60) + plannedLocalTime.minute
                                 var rTotal = (actualLocalTime.hour * 60) + actualLocalTime.minute
@@ -311,14 +321,19 @@ class TrainFetcher(context: Context) {
                     coroutineScope {
                         val updatedTrains = rawTrainList.map { train ->
                             async(Dispatchers.IO) {
-                                fetchViaggiaTrenoUpdate(train)
+                                var updated = fetchViaggiaTrenoUpdate(train)
+                                // If SAD or no stops from VT, try to fetch full stops from EFA
+                                if (updated.stops.size <= 2) {
+                                    updated = fetchFullStopsFromEFA(updated)
+                                }
+                                updated
                             }
                         }.awaitAll()
                         rawTrainList.clear()
                         rawTrainList.addAll(updatedTrains)
                     }
                 } catch (e: Exception) {
-                    println("DEBUG: VT Cross-Check failed: ${e.message}")
+                    println("DEBUG: VT/EFA Detail Check failed: ${e.message}")
                 }
 
             } catch (e: Exception) {
@@ -332,7 +347,7 @@ class TrainFetcher(context: Context) {
         // Final filtering: remove trains that have truly departed based on updated delay info
         return rawTrainList.asSequence().filter { train ->
             val bestRealTime = getBestRealTime(train) ?: train.time
-            val actual = calculateActualDepartureDateTime(
+            val actual = TrainInfo.calculateActualDateTime(
                 train.planDate ?: now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
                 train.time,
                 bestRealTime,
@@ -351,7 +366,7 @@ class TrainFetcher(context: Context) {
         val maxDelay = maxOf(vtMins, rfiMins, efaMins)
         if (maxDelay < 0) return null
 
-        val planned = parseLocalTime(train.time) ?: return null
+        val planned = try { LocalTime.parse(train.time, DateTimeFormatter.ofPattern("HH:mm")) } catch(_: Exception) { null } ?: return null
         return planned.plusMinutes(maxDelay.toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
     }
 
@@ -400,16 +415,106 @@ class TrainFetcher(context: Context) {
                         val ritardo = andamentoJson.optInt("ritardo", -999)
                         val provvedimento = andamentoJson.optInt("provvedimento", 0)
                         val isSopresso = (provvedimento != 0) || andamentoJson.optBoolean("provvedimento", false)
+                        
+                        val vtOrigin = andamentoJson.optString("origine").takeIf { it.isNotEmpty() }
+                        val vtDest = andamentoJson.optString("destinazione").takeIf { it.isNotEmpty() }
+                        
+                        // Fetch full stop list from ViaggiaTreno
+                        val vtStops = mutableListOf<TrainStop>()
+                        val fermateArray = andamentoJson.optJSONArray("fermate")
+                        if (fermateArray != null) {
+                            for (j in 0 until fermateArray.length()) {
+                                val f = fermateArray.getJSONObject(j)
+                                val sName = f.optString("stazione").split("/").first().trim()
+                                val sTime = if (f.optLong("partenza_teorica") > 0) {
+                                    Instant.ofEpochMilli(f.optLong("partenza_teorica")).atZone(
+                                        ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                        DateTimeFormatter.ofPattern("HH:mm"))
+                                } else {
+                                    Instant.ofEpochMilli(f.optLong("arrivo_teorico")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                        DateTimeFormatter.ofPattern("HH:mm"))
+                                }
+                                val aTime = if (f.optLong("partenzaReale") > 0) {
+                                    Instant.ofEpochMilli(f.optLong("partenzaReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                        DateTimeFormatter.ofPattern("HH:mm"))
+                                } else if (f.optLong("arrivoReale") > 0) {
+                                    Instant.ofEpochMilli(f.optLong("arrivoReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                        DateTimeFormatter.ofPattern("HH:mm"))
+                                } else sTime
+                                
+                                val delayVal = f.optInt("ritardo", 0)
+                                val dStr = if (delayVal > 0) "+$delayVal Min." else "pünktlich"
+                                val isCancelledStop = f.optInt("actualFermataType") == 3
+                                vtStops.add(TrainStop(sName, sTime, aTime, dStr, isCancelledStop))
+                            }
+                        }
 
                         if (isSopresso) {
-                            return train.copy(vtStatus = "entfällt", vtDelay = "")
+                            return train.copy(
+                                vtStatus = "entfällt", 
+                                vtDelay = "", 
+                                lineOrigin = vtOrigin ?: train.lineOrigin, 
+                                lineTerminal = vtDest ?: train.lineTerminal,
+                                stops = if (vtStops.isNotEmpty()) vtStops else train.stops
+                            )
                         } else if (ritardo != -999) {
                             val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
                             val vtStatus = if (ritardo > 0) "Verspätung" else "pünktlich"
-                            return train.copy(vtDelay = vtDisplay, vtStatus = vtStatus)
+                            return train.copy(
+                                vtDelay = vtDisplay, 
+                                vtStatus = vtStatus,
+                                lineOrigin = vtOrigin ?: train.lineOrigin, 
+                                lineTerminal = vtDest ?: train.lineTerminal,
+                                stops = if (vtStops.isNotEmpty()) vtStops else train.stops
+                            )
                         }
                     }
                 }
+            }
+        } catch (_: Exception) { }
+        return train
+    }
+
+    private suspend fun fetchFullStopsFromEFA(train: TrainInfo): TrainInfo {
+        val rid = train.uniqueRID ?: return train
+        try {
+            val url = "https://efa.sta.bz.it/web/XML_TTR_REQUEST?requestId=1&outputFormat=JSON&assignRID=1&name_tt=$rid"
+            val responseStr = withContext(Dispatchers.IO) {
+                try {
+                    Jsoup.connect(url).ignoreContentType(true).timeout(8000).execute().body()
+                } catch (_: Exception) { null }
+            } ?: return train
+            
+            val root = JSONObject(responseStr)
+            val tt = root.optJSONObject("trainTrip") ?: return train
+            val pointsArray = tt.optJSONArray("stopList") ?: tt.optJSONArray("point") ?: tt.optJSONArray("points") ?: JSONArray()
+            
+            val fullStops = mutableListOf<TrainStop>()
+            for (i in 0 until pointsArray.length()) {
+                val point = pointsArray.getJSONObject(i)
+                val stopName = point.optString("name")
+                val sTime = extractTime(point, listOf("itdTime", "dateTime", "departureTimePlanned", "time", "arrivalTimePlanned")) ?: ""
+                val aTime = extractTime(point, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime", "arrivalTimeEstimated")) ?: sTime
+                val cancelled = (point.optString("isCancelled") == "1") || point.optBoolean("isCancelled", false)
+                
+                var dStr = "pünktlich"
+                if ((aTime != sTime) && sTime.isNotEmpty()) {
+                    val pLT = TrainInfo.parseLocalTime(sTime)
+                    val aLT = TrainInfo.parseLocalTime(aTime)
+                    if ((pLT != null) && (aLT != null)) {
+                        val pT = (pLT.hour * 60) + pLT.minute
+                        var rT = (aLT.hour * 60) + aLT.minute
+                        if ((rT < pT) && ((pT - rT) > 720)) rT += 1440
+                        val dM = rT - pT
+                        if (dM > 0) dStr = "+$dM Min."
+                    }
+                }
+                if (cancelled) dStr = "entfällt"
+                fullStops.add(TrainStop(stopName, sTime, aTime, dStr, cancelled))
+            }
+            
+            if (fullStops.isNotEmpty()) {
+                return train.copy(stops = fullStops)
             }
         } catch (_: Exception) { }
         return train
@@ -464,46 +569,6 @@ class TrainFetcher(context: Context) {
             Regex("""\b(\d{2}:\d{2})\b""").find(str)?.value?.let { return it }
         }
         return null
-    }
-
-    private fun calculateActualDepartureDateTime(
-        planDate: String,
-        planTime: String,
-        realTime: String?,
-    ): LocalDateTime {
-        val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
-        val date = try {
-            java.time.LocalDate.parse(planDate, dateFormatter)
-        } catch (_: Exception) {
-            java.time.LocalDate.now()
-        }
-
-        val plannedTime = parseLocalTime(planTime) ?: LocalTime.MIDNIGHT
-        val actualTime = parseLocalTime(realTime ?: planTime) ?: plannedTime
-
-        var actualDate = date
-
-        val plannedMinutes = (plannedTime.hour * 60) + plannedTime.minute
-        val actualMinutes = (actualTime.hour * 60) + actualTime.minute
-
-        /*
-         * Mitternachtswechsel erkennen.
-         * Wenn die Abfahrt eigentlich schon gestern war (oder heute sehr spät),
-         * aber die Verspätung sie über Mitternacht schiebt.
-         */
-        if ((actualMinutes < plannedMinutes) && ((plannedMinutes - actualMinutes) > 720)) {
-            actualDate = actualDate.plusDays(1)
-        }
-
-        return LocalDateTime.of(actualDate, actualTime)
-    }
-
-    private fun parseLocalTime(timeStr: String): LocalTime? {
-        return try {
-            LocalTime.parse(timeStr, DateTimeFormatter.ofPattern("HH:mm"))
-        } catch (_: Exception) {
-            null
-        }
     }
 
     private suspend fun resolveEfaId(stationName: String): String {

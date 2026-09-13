@@ -1,5 +1,7 @@
 package com.example.traincontrolstmobilandroid
 
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -47,10 +49,28 @@ data class TrainInfo(
     val rfiStatus: String? = null,
     val vtDelay: String? = null,
     val vtStatus: String? = null,
+    val lineOrigin: String? = null,
     val lineTerminal: String? = null,
     val planDate: String? = null,
+    val uniqueRID: String? = null,
     val stops: List<TrainStop> = emptyList(),
 ) {
+    val cleanCategoryNumber: String
+        get() = categoryNumber
+            .split(" von ").first()
+            .replace("Regional-Express", "", ignoreCase = true)
+            .replace("Regionalexpress", "", ignoreCase = true)
+            .replace("Regionale Veloce", "", ignoreCase = true)
+            .replace("Regionalzug", "", ignoreCase = true)
+            .replace("Regionale", "", ignoreCase = true)
+            .replace("Zug", "", ignoreCase = true)
+            .trim()
+
+    val extractedLineOrigin: String?
+        get() = if (categoryNumber.contains(" von ", ignoreCase = true)) {
+            categoryNumber.split(Regex(" von ", RegexOption.IGNORE_CASE)).last().trim()
+        } else null
+
     val isCancelled: Boolean
         get() = (delay == "entfällt") || (rfiStatus == "entfällt") || (vtStatus == "entfällt")
 
@@ -117,6 +137,45 @@ data class TrainInfo(
                 append("VT ($vtText)")
             }
         }.takeIf { it.isNotEmpty() }
+
+    fun getActualDateTimeForStop(stop: TrainStop): LocalDateTime {
+        return calculateActualDateTime(planDate ?: "", stop.scheduledTime, stop.actualTime)
+    }
+
+    companion object {
+        fun calculateActualDateTime(
+            planDate: String,
+            planTime: String,
+            realTime: String?,
+        ): LocalDateTime {
+            val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
+            val date = try {
+                LocalDate.parse(planDate, dateFormatter)
+            } catch (_: Exception) {
+                LocalDate.now()
+            }
+
+            val plannedTime = parseLocalTime(planTime) ?: LocalTime.MIDNIGHT
+            val actualTime = parseLocalTime(realTime ?: planTime) ?: plannedTime
+
+            var actualDate = date
+            val plannedMinutes = (plannedTime.hour * 60) + plannedTime.minute
+            val actualMinutes = (actualTime.hour * 60) + actualTime.minute
+
+            if ((actualMinutes < plannedMinutes) && ((plannedMinutes - actualMinutes) > 720)) {
+                actualDate = actualDate.plusDays(1)
+            }
+            return LocalDateTime.of(actualDate, actualTime)
+        }
+
+        fun parseLocalTime(timeStr: String): LocalTime? {
+            return try {
+                LocalTime.parse(timeStr, DateTimeFormatter.ofPattern("HH:mm"))
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
 }
 
 data class StationData(

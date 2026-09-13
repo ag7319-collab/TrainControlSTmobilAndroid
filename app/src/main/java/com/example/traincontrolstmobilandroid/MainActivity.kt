@@ -17,6 +17,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -25,6 +26,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.magnifier
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -38,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -64,6 +68,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.time.LocalDateTime
 import java.util.*
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -518,14 +523,7 @@ fun ResultsScreen(
 @Composable
 fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
     val terminal = (train.lineTerminal ?: train.destination).split("/").first().trim()
-    val cleanCat = train.categoryNumber
-        .replace("Regional-Express", "", ignoreCase = true)
-        .replace("Regionalexpress", "", ignoreCase = true)
-        .replace("Regionale Veloce", "", ignoreCase = true)
-        .replace("Regionalzug", "", ignoreCase = true)
-        .replace("Regionale", "", ignoreCase = true)
-        .replace("Zug", "", ignoreCase = true)
-        .trim()
+    val cleanCat = train.cleanCategoryNumber
     
     val shortTarget = target.name.split("/").first().trim()
 
@@ -654,26 +652,141 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
 fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) {
-            Text(text = "${train.categoryNumber} nach ${train.lineTerminal ?: train.destination}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            fun cleanStationName(name: String): String {
+                return name.split("/").first()
+                    .split(",").first()
+                    .replace(Regex("\\b(Bahnhof|Stazione|Station)\\b", RegexOption.IGNORE_CASE), "")
+                    .trim()
+            }
+
+            val origin = cleanStationName(train.lineOrigin ?: train.extractedLineOrigin ?: train.stops.firstOrNull()?.name ?: "?")
+            val dest = cleanStationName(train.lineTerminal ?: train.destination)
+            val isNotOnViaggiaTreno = train.vtStatus == null && !train.isBus
+            val sadSuffix = if (isNotOnViaggiaTreno) " (SAD)" else ""
+            
+            Text(
+                text = "${train.cleanCategoryNumber}$sadSuffix $origin -> $dest",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.height(16.dp))
-            LazyColumn {
-                items(train.stops) { stop ->
-                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = stop.name, fontWeight = FontWeight.Medium)
-                            Text(text = "Geplant: ${stop.scheduledTime}", style = MaterialTheme.typography.bodySmall)
+            
+            val now = LocalDateTime.now()
+            val surfaceColorForCanvas = MaterialTheme.colorScheme.surface
+            val lastPassedIndex = train.stops.indexOfLast { train.getActualDateTimeForStop(it).isBefore(now) }
+            
+            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                itemsIndexed(train.stops) { index, stop ->
+                    val isPassed = index <= lastPassedIndex
+                    val isLastPassed = index == lastPassedIndex
+                    val isNext = index == lastPassedIndex + 1
+
+                    val dotColor = when {
+                        stop.isCancelled -> Color.Red
+                        isPassed -> Color(0xFF4CAF50) // Green
+                        else -> Color.LightGray
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        // ... (Canvas logic stays the same)
+                        Box(modifier = Modifier.width(24.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+                            Canvas(modifier = Modifier.fillMaxSize()) {
+                                val cx = size.width / 2
+                                val dotY = 12.dp.toPx()
+                                if (index < train.stops.size - 1) {
+                                    drawLine(
+                                        color = Color.LightGray,
+                                        start = Offset(cx, dotY),
+                                        end = Offset(cx, size.height),
+                                        strokeWidth = 2.dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                                    )
+                                }
+                                if (index > 0) {
+                                    drawLine(
+                                        color = Color.LightGray,
+                                        start = Offset(cx, 0f),
+                                        end = Offset(cx, dotY),
+                                        strokeWidth = 2.dp.toPx(),
+                                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                                    )
+                                }
+                                drawCircle(color = surfaceColorForCanvas, radius = 6.dp.toPx(), center = Offset(cx, dotY))
+                                drawCircle(color = dotColor, radius = 6.dp.toPx(), center = Offset(cx, dotY), style = Stroke(width = 2.dp.toPx()))
+                                if (isPassed && !stop.isCancelled) {
+                                    drawCircle(color = dotColor, radius = 3.dp.toPx(), center = Offset(cx, dotY))
+                                }
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.End) {
-                            val effTime = stop.getEffectiveTime(train.maxDelayMinutes)
-                            val effDelay = stop.getEffectiveDelay(train.maxDelayMinutes)
-                            val color = if ((stop.isCancelled) || (effDelay != "pünktlich")) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
-                            Text(text = effTime, color = color, fontWeight = FontWeight.Bold)
-                            Text(text = effDelay, color = color, style = MaterialTheme.typography.labelSmall)
+
+                        // Station Info
+                        Column(modifier = Modifier.weight(1f).padding(bottom = 12.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = stop.name, fontWeight = FontWeight.Medium)
+                                    Text(text = "Geplant: ${stop.scheduledTime}", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    val effTime = stop.getEffectiveTime(train.maxDelayMinutes)
+                                    val effDelay = stop.getEffectiveDelay(train.maxDelayMinutes)
+                                    
+                                    val showDelayInfo = when {
+                                        stop.isCancelled -> true
+                                        isPassed -> true
+                                        isNext -> effDelay != "pünktlich"
+                                        else -> false
+                                    }
+
+                                    if (showDelayInfo) {
+                                        val isDelayed = effDelay != "pünktlich" && !stop.isCancelled
+                                        val color = when {
+                                            stop.isCancelled -> Color.Red
+                                            index < lastPassedIndex -> Color.Gray
+                                            isLastPassed -> if (isDelayed) Color.Red else MaterialTheme.colorScheme.onSurface
+                                            isNext -> Color.Gray
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        }
+                                        val isBold = isLastPassed
+                                        Text(
+                                            text = effTime, 
+                                            color = color, 
+                                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                                            fontStyle = if (isNext) FontStyle.Italic else FontStyle.Normal
+                                        )
+                                        Text(
+                                            text = effDelay, 
+                                            color = color, 
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontStyle = if (isNext) FontStyle.Italic else FontStyle.Normal,
+                                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
-                    HorizontalDivider()
                 }
             }
+            
+            val lastPassedStop = train.stops.findLast { train.getActualDateTimeForStop(it).isBefore(now) }
+            if (lastPassedStop != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                val isDelayed = lastPassedStop.getEffectiveDelay(train.maxDelayMinutes) != "pünktlich" && !lastPassedStop.isCancelled
+                val posColor = if (isDelayed || lastPassedStop.isCancelled) MainActivity.Landtagsrot else MaterialTheme.colorScheme.onSurface
+                
+                Text(
+                    text = "Aktuelle Position: ${lastPassedStop.name}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = posColor,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
