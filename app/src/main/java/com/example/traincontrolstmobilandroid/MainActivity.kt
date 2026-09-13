@@ -13,17 +13,20 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -39,12 +42,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -379,6 +384,15 @@ fun TrainApp(
         BatteryOptimizationDialog { showBatteryDialog = false }
     }
 
+    // Handle back button for bottom sheet and settings
+    BackHandler(enabled = selectedTrain != null || showSettings) {
+        if (selectedTrain != null) {
+            viewModel.selectTrain(null)
+        } else if (showSettings) {
+            viewModel.closeSettings()
+        }
+    }
+
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             when (val state = uiState) {
@@ -417,8 +431,10 @@ fun TrainApp(
             }
 
             if (selectedTrain != null) {
-                TripDetailBottomSheet(train = selectedTrain!!) {
-                    viewModel.selectTrain(null)
+                selectedTrain?.let { train ->
+                    TripDetailBottomSheet(train = train) {
+                        viewModel.selectTrain(null)
+                    }
                 }
             }
         }
@@ -453,7 +469,7 @@ fun LoadingScreen(message: String = "") {
                 text = "> $message",
                 color = Color.LightGray,
                 fontSize = 11.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                fontFamily = FontFamily.Monospace
             )
         }
     }
@@ -520,6 +536,7 @@ fun ResultsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
     val terminal = (train.lineTerminal ?: train.destination).split("/").first().trim()
@@ -543,7 +560,9 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
             .magnifier(
                 sourceCenter = { magnifierCenter },
                 zoom = 3f,
-                magnifierCenter = { magnifierCenter - Offset(0f, 100f) },
+                magnifierCenter = { 
+                    if (magnifierCenter.isSpecified) magnifierCenter - Offset(0f, 100f) else Offset.Unspecified 
+                },
                 size = DpSize(width = 240.dp, height = 120.dp)
             )
             .clickable { onClick() }
@@ -664,16 +683,43 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
             val isNotOnViaggiaTreno = train.vtStatus == null && !train.isBus
             val sadSuffix = if (isNotOnViaggiaTreno) " (SAD)" else ""
             
+            val now = LocalDateTime.now()
+            val lastPassedIndex = train.stops.indexOfLast { train.getActualDateTimeForStop(it).isBefore(now) }
+            val hasNotStarted = lastPassedIndex == -1 && !train.isCancelled
+
             Text(
                 text = "${train.cleanCategoryNumber}$sadSuffix $origin -> $dest",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
+            
+            if (hasNotStarted) {
+                Text(
+                    text = "Zug noch nicht gestartet",
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            } else {
+                val lastPassedStop = train.stops.getOrNull(lastPassedIndex)
+                if (lastPassedStop != null) {
+                    val isDelayed = lastPassedStop.getEffectiveDelay(train.maxDelayMinutes) != "pünktlich" && !lastPassedStop.isCancelled
+                    val posColor = if (isDelayed || lastPassedStop.isCancelled) Color.Red else Color.Gray
+                    
+                    Text(
+                        text = "Aktuelle Position: ${lastPassedStop.name}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = posColor,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
             
-            val now = LocalDateTime.now()
             val surfaceColorForCanvas = MaterialTheme.colorScheme.surface
-            val lastPassedIndex = train.stops.indexOfLast { train.getActualDateTimeForStop(it).isBefore(now) }
             
             LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                 itemsIndexed(train.stops) { index, stop ->
@@ -743,19 +789,17 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
                                     }
 
                                     if (showDelayInfo) {
-                                        val isDelayed = effDelay != "pünktlich" && !stop.isCancelled
                                         val color = when {
                                             stop.isCancelled -> Color.Red
                                             index < lastPassedIndex -> Color.Gray
-                                            isLastPassed -> if (isDelayed) Color.Red else MaterialTheme.colorScheme.onSurface
+                                            isLastPassed -> if (effDelay != "pünktlich") Color.Red else MaterialTheme.colorScheme.onSurface
                                             isNext -> Color.Gray
                                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                                         }
-                                        val isBold = isLastPassed
                                         Text(
                                             text = effTime, 
                                             color = color, 
-                                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+                                            fontWeight = if (isLastPassed) FontWeight.Bold else FontWeight.Normal,
                                             fontStyle = if (isNext) FontStyle.Italic else FontStyle.Normal
                                         )
                                         Text(
@@ -763,7 +807,7 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
                                             color = color, 
                                             style = MaterialTheme.typography.labelSmall,
                                             fontStyle = if (isNext) FontStyle.Italic else FontStyle.Normal,
-                                            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
+                                            fontWeight = if (isLastPassed) FontWeight.Bold else FontWeight.Normal
                                         )
                                     }
                                 }
@@ -771,20 +815,6 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
                         }
                     }
                 }
-            }
-            
-            val lastPassedStop = train.stops.findLast { train.getActualDateTimeForStop(it).isBefore(now) }
-            if (lastPassedStop != null) {
-                Spacer(modifier = Modifier.height(16.dp))
-                val isDelayed = lastPassedStop.getEffectiveDelay(train.maxDelayMinutes) != "pünktlich" && !lastPassedStop.isCancelled
-                val posColor = if (isDelayed || lastPassedStop.isCancelled) MainActivity.Landtagsrot else MaterialTheme.colorScheme.onSurface
-                
-                Text(
-                    text = "Aktuelle Position: ${lastPassedStop.name}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = posColor,
-                    fontWeight = FontWeight.Bold
-                )
             }
             
             Spacer(modifier = Modifier.height(32.dp))
