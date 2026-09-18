@@ -66,24 +66,33 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val relevantTrains = trains.filter { it.stopsAtTarget != false }
         val alarmTrainCount = prefs.getInt("alarm_train_count", 3)
 
-        val delayedTrain = relevantTrains.asSequence().take(alarmTrainCount).firstOrNull {
-            it.isCancelled || it.maxDelayMinutes >= 6
+        // Vorherige Benachrichtigungen für diesen Bereich löschen
+        for (i in 0 until 5) {
+            notificationHelper.cancelNotification(1001 + i)
         }
 
-        if (delayedTrain != null) {
-            notificationHelper.playSingleBeep()
+        var hasShownNotification = false
+        val trainsToNotify = relevantTrains.take(alarmTrainCount).withIndex().filter { it.value.hasAnyDelay }
+
+        // Benachrichtigungen in umgekehrter Reihenfolge senden, damit der 1. Zug oben erscheint
+        trainsToNotify.reversed().forEach { (index, train) ->
+            if (!hasShownNotification) {
+                notificationHelper.playSingleBeep()
+                hasShownNotification = true
+            }
+            
             val fullDelay = buildString {
-                append(delayedTrain.bestDelayInfo)
-                delayedTrain.extraDelayInfoShort?.let { extra ->
+                append(train.bestDelayInfo)
+                train.extraDelayInfoShort?.let { extra ->
                     append("\n")
                     append(extra)
                 }
             }
             notificationHelper.sendGarminNotification(
-                message = "Zug ${delayedTrain.categoryNumber}\nnach ${delayedTrain.lineTerminal ?: delayedTrain.destination}\n${delayedTrain.time} Uhr\n$fullDelay",
-                title = "⚠️ Zugverspätung",
+                message = "Zug ${train.categoryNumber}\nnach ${train.lineTerminal ?: train.destination}\n${train.time} Uhr\n$fullDelay",
+                title = if (train.isCancelled) "❌ Zugausfall" else "⚠️ Zugverspätung",
+                notificationId = 1001 + index
             )
-            kotlinx.coroutines.delay(1000.milliseconds)
         }
 
         Result.success()
