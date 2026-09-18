@@ -66,7 +66,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val relevantTrains = trains.filter { it.stopsAtTarget != false }
         val alarmTrainCount = prefs.getInt("alarm_train_count", 3)
 
-        // Vorherige Benachrichtigungen für diesen Bereich löschen
+        // Vorherige Benachrichtigungen löschen
         for (i in 0 until 5) {
             notificationHelper.cancelNotification(1001 + i)
         }
@@ -74,7 +74,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         var hasShownNotification = false
         val trainsToNotify = relevantTrains.take(alarmTrainCount).withIndex().filter { it.value.hasAnyDelay }
 
-        // Benachrichtigungen in umgekehrter Reihenfolge senden, damit der 1. Zug oben erscheint
+        // Benachrichtigungen in umgekehrter Reihenfolge senden, damit der 1. Zug auf dem Smartphone oben erscheint
         trainsToNotify.reversed().forEach { (index, train) ->
             if (!hasShownNotification) {
                 notificationHelper.playSingleBeep()
