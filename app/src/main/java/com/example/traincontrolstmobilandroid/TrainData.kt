@@ -74,6 +74,9 @@ data class TrainInfo(
     val isCancelled: Boolean
         get() = (delay == "entfällt") || (rfiStatus == "entfällt") || (vtStatus == "entfällt")
 
+    val hasAnyDelay: Boolean
+        get() = isCancelled || maxDelayMinutes > 0
+
     val isRfiDelayed: Boolean
         get() = (rfiStatus == "Verspätung") || (rfiStatus == "entfällt")
 
@@ -90,7 +93,11 @@ data class TrainInfo(
         }
 
     val bestDelayInfo: String
-        get() = "STA: $delay"
+        get() {
+            if (isCancelled) return "fällt aus"
+            val mins = maxDelayMinutes
+            return if (mins > 0) "+$mins Min." else "pünktlich"
+        }
 
     fun getRfiDisplay(label: String): String? {
         val text = when (rfiStatus) {

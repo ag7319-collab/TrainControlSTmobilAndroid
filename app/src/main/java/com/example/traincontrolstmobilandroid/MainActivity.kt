@@ -81,7 +81,7 @@ import kotlin.time.Duration.Companion.seconds
 class MainActivity : ComponentActivity() {
 
     companion object {
-        val Landtagsrot = Color(0xFFCE1126)
+        val PrimaryColor = Color(0xFF0F47AF)
         
         val CATEGORY_GROUPS = mapOf(
             "Regionalverkehr RFI/SAD" to listOf(
@@ -110,15 +110,15 @@ class MainActivity : ComponentActivity() {
             val isDark = isSystemInDarkTheme()
             val customColorScheme = if (isDark) {
                 darkColorScheme(
-                    primary = Landtagsrot,
-                    secondary = Landtagsrot,
+                    primary = PrimaryColor,
+                    secondary = PrimaryColor,
                     tertiary = Color.Gray,
                     onPrimary = Color.White,
                 )
             } else {
                 lightColorScheme(
-                    primary = Landtagsrot,
-                    secondary = Landtagsrot,
+                    primary = PrimaryColor,
+                    secondary = PrimaryColor,
                     tertiary = Color.Gray,
                     onPrimary = Color.White,
                 )
@@ -452,10 +452,10 @@ fun LoadingScreen(message: String = "") {
             painter = painterResource(id = R.drawable.ic_launcher_foreground),
             contentDescription = null,
             modifier = Modifier.size(140.dp),
-            tint = MainActivity.Landtagsrot
+            tint = MainActivity.PrimaryColor
         )
         Spacer(modifier = Modifier.height(20.dp))
-        CircularProgressIndicator(color = MainActivity.Landtagsrot)
+        CircularProgressIndicator(color = MainActivity.PrimaryColor)
         Spacer(modifier = Modifier.height(20.dp))
         Text(
             text = "Lade Zugdaten...",
@@ -525,7 +525,7 @@ fun ResultsScreen(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Aktualisieren",
-                    tint = MainActivity.Landtagsrot
+                    tint = MainActivity.PrimaryColor
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -619,7 +619,7 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
             )
             
-            val staColor = if (train.hasDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+            val staColor = if (train.hasAnyDelay) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
             val displayDelay = if (train.platform.length > 1) {
                 train.bestDelayInfo.replace("pünktlich", "pünktl.")
             } else {
@@ -628,7 +628,7 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
             Text(
                 text = "| $displayDelay",
                 color = staColor,
-                fontWeight = if (train.hasDelay) FontWeight.Bold else FontWeight.Normal,
+                fontWeight = if (train.hasAnyDelay) FontWeight.Bold else FontWeight.Normal,
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -694,9 +694,16 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
             )
             
             if (hasNotStarted) {
+                val statusText = if (train.hasAnyDelay && !train.isCancelled) {
+                    "Zug noch nicht gestartet (Verspätung erwartet)"
+                } else {
+                    "Zug noch nicht gestartet"
+                }
+                val statusColor = if (train.hasAnyDelay) Color.Red else Color.Gray
+                
                 Text(
-                    text = "Zug noch nicht gestartet",
-                    color = Color.Gray,
+                    text = statusText,
+                    color = statusColor,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(top = 2.dp)
