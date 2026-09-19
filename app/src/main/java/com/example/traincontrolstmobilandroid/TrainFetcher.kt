@@ -43,7 +43,7 @@ class TrainFetcher(context: Context) {
                 val efaFromId = fromStation.efaId ?: resolveEfaId(fromStation.name)
                 val efaToId = targetStation.efaId ?: resolveEfaId(targetStation.name)
 
-                val queryOffsets = listOf(60L, 0L)
+                val queryOffsets = listOf(120L, 0L)
 
                 for (offset in queryOffsets) {
                     onProgress("Abfrage EFA (STA)")
@@ -198,8 +198,8 @@ class TrainFetcher(context: Context) {
                         val realTime = extractTime(originNode, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime")) ?: planTime
 
                         val actualDeparture = TrainInfo.calculateActualDateTime(planDate, planTime, realTime)
-                        // Be more lenient: keep trains from the last 75 minutes for cross-checking
-                        if (!actualDeparture.isAfter(now.minusMinutes(75))) continue
+                        // Be more lenient: keep trains from the last 135 minutes for cross-checking
+                        if (!actualDeparture.isAfter(now.minusMinutes(135))) continue
                         if (actualDeparture.isAfter(now.plusHours(5))) continue
 
                         if (rawTrainList.any { (it.categoryNumber == transpName) && (it.time == planTime) }) continue
