@@ -262,6 +262,8 @@ class TrainFetcher(context: Context) {
 
                     if (rfiDoc != null) {
                         val rfiRows = rfiDoc.select("tr")
+                        
+                        // 1. Bestehende Züge anreichern (Original-Logik)
                         for ((i, train) in rawTrainList.withIndex()) {
                             val efaNum = train.categoryNumber.filter { it.isDigit() }
                             if (efaNum.isBlank()) continue
@@ -308,6 +310,52 @@ class TrainFetcher(context: Context) {
 
                                         rawTrainList[i] = train.copy(rfiDelay = delayDisplay, rfiStatus = statusText)
                                     }
+                                }
+                            }
+                        }
+
+                        // 2. Neue Züge entdecken (Quervergleich)
+                        val targetShort = targetStation.name.split("/").first().trim().lowercase()
+                        val targetAliases = targetStation.aliases.map { it.lowercase() }
+                        for (row in rfiRows) {
+                            val rowText = row.text().lowercase()
+                            if (rowText.contains(targetShort) || targetAliases.any { rowText.contains(it) }) {
+                                val cols = row.select("td")
+                                if (cols.size < 5) continue
+                                
+                                val trainTypeNum = cols[0].text().trim()
+                                val rfiNum = trainTypeNum.filter { it.isDigit() }
+                                if (rfiNum.isBlank()) continue
+                                
+                                val timeRegex = Regex("""\b\d{2}:\d{2}\b""")
+                                val colTexts = cols.map { it.text().trim() }
+                                val timeIdx = colTexts.indexOfFirst { timeRegex.containsMatchIn(it) }
+                                if (timeIdx == -1) continue
+                                val planTime = colTexts[timeIdx]
+                                
+                                // Nur hinzufügen, wenn noch nicht in der Liste
+                                if (rawTrainList.none { it.categoryNumber.contains(rfiNum) && it.time == planTime }) {
+                                    val destination = colTexts[timeIdx - 1]
+                                    val rawDelay = colTexts[timeIdx + 1]
+                                    val platform = if (colTexts.size > (timeIdx + 2)) colTexts[timeIdx + 2] else "-"
+                                    
+                                    val isCancelled = rawDelay.contains("SOP", ignoreCase = true) || rawDelay.contains("CANC", ignoreCase = true) || row.text().contains("SOPPRESSO", ignoreCase = true)
+                                    val statusText = if (isCancelled) "entfällt" else if (rawDelay.isBlank() || rawDelay == "0" || rawDelay == "pünktlich") "pünktlich" else "Verspätung"
+                                    val delayDisplay = if (isCancelled) "" else if (statusText == "pünktlich") "+0" else if (rawDelay.all { it.isDigit() }) "+$rawDelay" else rawDelay
+
+                                    rawTrainList.add(TrainInfo(
+                                        categoryNumber = trainTypeNum,
+                                        destination = destination,
+                                        time = planTime,
+                                        delay = if (isCancelled) "entfällt" else "pünktlich",
+                                        platform = platform,
+                                        hasDelay = isCancelled,
+                                        stopsAtTarget = true,
+                                        rfiDelay = delayDisplay,
+                                        rfiStatus = statusText,
+                                        planDate = now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                                        stops = emptyList(),
+                                    ))
                                 }
                             }
                         }
