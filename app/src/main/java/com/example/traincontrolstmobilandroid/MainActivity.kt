@@ -146,17 +146,31 @@ fun BatteryOptimizationDialog(onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         title = { Text("Energieeinstellungen") },
         text = {
-            Text("Damit die App auch im Hintergrund zuverlässig über Verspätungen informieren kann, muss die Akku-Optimierung für diese App deaktiviert werden (Einstellung 'Nicht eingeschränkt').")
+            Column {
+                Text("Damit die App auch im Hintergrund zuverlässig über Verspätungen informieren kann, muss die Akku-Optimierung deaktiviert werden (Einstellung 'Nicht eingeschränkt').")
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Samsung-Nutzer: Bitte die App zusätzlich unter 'Grenzen der Hintergrundnutzung' als 'Nie im Standby befindliche App' hinzufügen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                    context.startActivity(intent)
+                    try {
+                        // Play Store konforme Methode: Liste der Einstellungen öffnen
+                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        Toast.makeText(context, "Einstellungen konnten nicht geöffnet werden", Toast.LENGTH_SHORT).show()
+                    }
                     onDismiss()
                 }
             ) {
-                Text("Einstellungen öffnen")
+                Text("Einstellung öffnen")
             }
         },
         dismissButton = {
