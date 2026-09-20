@@ -26,6 +26,7 @@ class TrainFetcher(context: Context) {
         val limit = 10
         val internalLimit = 25
 
+        @Suppress("RedundantInitializer")
         val allowBus = prefs.getBoolean("cat_bus", true)
         val allowReg = prefs.getBoolean("cat_reg", true)
         val allowRv = prefs.getBoolean("cat_rv", true)
@@ -351,7 +352,7 @@ class TrainFetcher(context: Context) {
                                 val planTime = colTexts[timeIdx]
                                 
                                 // Nur hinzufügen, wenn noch nicht in der Liste
-                                if (rawTrainList.none { it.categoryNumber.contains(rfiNum) && it.time == planTime }) {
+                                if (rawTrainList.none { (it.categoryNumber.contains(rfiNum)) && (it.time == planTime) }) {
                                     val destination = colTexts[timeIdx - 1]
                                     val rawDelay = colTexts[timeIdx + 1]
                                     val platform = if (colTexts.size > (timeIdx + 2)) colTexts[timeIdx + 2] else "-"
@@ -372,7 +373,8 @@ class TrainFetcher(context: Context) {
                                         rfiStatus = statusText,
                                         planDate = now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
                                         stops = emptyList(),
-                                    ))
+                                    )
+                                )
                                 }
                             }
                         }
@@ -520,7 +522,7 @@ class TrainFetcher(context: Context) {
                                 vtDelay = "", 
                                 lineOrigin = vtOrigin ?: train.lineOrigin, 
                                 lineTerminal = vtDest ?: train.lineTerminal,
-                                stops = if (vtStops.isNotEmpty()) vtStops else train.stops
+                                stops = vtStops.ifEmpty { train.stops }
                             )
                         } else if (ritardo != -999) {
                             val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
@@ -530,7 +532,7 @@ class TrainFetcher(context: Context) {
                                 vtStatus = vtStatus,
                                 lineOrigin = vtOrigin ?: train.lineOrigin, 
                                 lineTerminal = vtDest ?: train.lineTerminal,
-                                stops = if (vtStops.isNotEmpty()) vtStops else train.stops
+                                stops = vtStops.ifEmpty { train.stops }
                             )
                         }
                     }
