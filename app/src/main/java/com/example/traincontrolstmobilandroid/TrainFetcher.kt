@@ -351,9 +351,23 @@ class TrainFetcher(context: Context) {
                                 if (timeIdx == -1) continue
                                 val planTime = colTexts[timeIdx]
                                 
-                                // Nur hinzufügen, wenn noch nicht in der Liste
-                                if (rawTrainList.none { (it.categoryNumber.contains(rfiNum)) && (it.time == planTime) }) {
-                                    val destination = colTexts[timeIdx - 1]
+                                // Richtungsauswertung für RFI-Quervergleich:
+                                // Wenn wir von Brixen nach Bozen (Süden) wollen, darf das Ziel auf der Abfahrtstafel nicht Brenner/Innsbruck etc. sein!
+                                val destination = colTexts[timeIdx - 1]
+                                val destLower = destination.lowercase()
+                                val travelingSouth = fromStation.lat > targetStation.lat
+                                var directionMatches = true
+                                if (travelingSouth) {
+                                    if (destLower.contains("brenner") || destLower.contains("brennero") || destLower.contains("innsbruck") || destLower.contains("münchen") || destLower.contains("munich") || destLower.contains("fortezza") || destLower.contains("franzensfeste")) {
+                                        directionMatches = false
+                                    }
+                                } else {
+                                    if (destLower.contains("bozen") || destLower.contains("bolzano") || destLower.contains("trento") || destLower.contains("verona") || destLower.contains("bologna") || destLower.contains("roma")) {
+                                        directionMatches = false
+                                    }
+                                }
+
+                                if (directionMatches && rawTrainList.none { (it.categoryNumber.contains(rfiNum)) && (it.time == planTime) }) {
                                     val rawDelay = colTexts[timeIdx + 1]
                                     val platform = if (colTexts.size > (timeIdx + 2)) colTexts[timeIdx + 2] else "-"
                                     
@@ -393,6 +407,15 @@ class TrainFetcher(context: Context) {
                                 if (updated.stops.size <= 2) {
                                     updated = fetchFullStopsFromEFA(updated)
                                 }
+                                
+                                // Nachträgliche präzise Haltestellenprüfung (Bozen muss nach Brixen kommen)
+                                if (updated.stops.isNotEmpty()) {
+                                    val fromIdx = findStopIndex(updated.stops, fromStation)
+                                    val toIdx = findStopIndex(updated.stops, targetStation)
+                                    if (fromIdx != -1 && toIdx != -1) {
+                                        updated = updated.copy(stopsAtTarget = toIdx > fromIdx)
+                                    }
+                                }
                                 updated
                             }
                         }.awaitAll()
@@ -413,6 +436,7 @@ class TrainFetcher(context: Context) {
 
         // Final filtering: remove trains that have truly departed based on updated delay info
         return rawTrainList.asSequence().filter { train ->
+            if (train.stopsAtTarget == false) return@filter false
             val bestRealTime = getBestRealTime(train) ?: train.time
             val actual = TrainInfo.calculateActualDateTime(
                 train.planDate ?: now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
@@ -656,6 +680,18 @@ class TrainFetcher(context: Context) {
             } catch (_: Exception) {
                 "66000468"
             }
+        }
+    }
+
+    private fun findStopIndex(stops: List<TrainStop>, station: StationData): Int {
+        val cleanNames = mutableListOf<String>()
+        cleanNames.add(station.name.lowercase())
+        cleanNames.addAll(station.name.split("/").map { it.trim().lowercase() })
+        cleanNames.addAll(station.aliases.map { it.lowercase() })
+
+        return stops.indexOfFirst { stop ->
+            val stopNameLower = stop.name.lowercase()
+            cleanNames.any { stopNameLower.contains(it) || it.contains(stopNameLower) }
         }
     }
 }
