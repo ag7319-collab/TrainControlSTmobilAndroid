@@ -439,8 +439,7 @@ fun TrainApp(
                 SettingsDialog(
                     onDismiss = { viewModel.closeSettings() },
                     viewModel = viewModel,
-                    prefs = prefs,
-                    onFinish = onFinish
+                    prefs = prefs
                 )
             }
 
@@ -844,7 +843,7 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: SharedPreferences, onFinish: () -> Unit) {
+fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: SharedPreferences) {
     val context = LocalContext.current
     val stations = viewModel.getSelectableRegionalStations()
     val stationNames = stations.map { it.name }
@@ -896,10 +895,12 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                 AlarmSpinner(alarmCount) { alarmCount = it }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("Update-Zeiten", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                TimerSection("Morgens", timer1Enabled, timer1Hour, timer1Minute, timer1Days)
+                val workGerman = workStation.split("/").first().trim()
+                val homeGerman = homeStation.split("/").first().trim()
+                TimerSection("Nach $workGerman", timer1Enabled, timer1Hour, timer1Minute, timer1Days)
                 TimerSection("", timer3Enabled, timer3Hour, timer3Minute, timer3Days, showMasterCheckbox = false)
                 Spacer(modifier = Modifier.height(8.dp))
-                TimerSection("Nachmittags", timer2Enabled, timer2Hour, timer2Minute, timer2Days)
+                TimerSection("Nach $homeGerman", timer2Enabled, timer2Hour, timer2Minute, timer2Days)
                 TimerSection("", timer4Enabled, timer4Hour, timer4Minute, timer4Days, showMasterCheckbox = false)
                 Spacer(modifier = Modifier.height(24.dp))
                 MainActivity.CATEGORY_GROUPS.forEach { (group, filters) ->
@@ -946,7 +947,7 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                                 ScheduleHelper.scheduleAlarm(context, 2)
                                 ScheduleHelper.scheduleAlarm(context, 4)
                                 onDismiss()
-                                onFinish()
+                                viewModel.startAppFlow()
                             }
                         }
                     ) {

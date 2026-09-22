@@ -77,6 +77,9 @@ data class TrainInfo(
     val hasAnyDelay: Boolean
         get() = isCancelled || maxDelayMinutes > 0
 
+    val hasNotificationDelay: Boolean
+        get() = isCancelled || maxDelayMinutes >= 6
+
     val isRfiDelayed: Boolean
         get() = (rfiStatus == "Verspätung") || (rfiStatus == "entfällt")
 

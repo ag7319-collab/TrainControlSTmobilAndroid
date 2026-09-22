@@ -72,7 +72,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         }
 
         var hasShownNotification = false
-        val trainsToNotify = relevantTrains.take(alarmTrainCount).withIndex().filter { it.value.hasAnyDelay }
+        val trainsToNotify = relevantTrains.take(alarmTrainCount).withIndex().filter { it.value.hasNotificationDelay }
 
         // Benachrichtigungen in umgekehrter Reihenfolge senden, damit der 1. Zug auf dem Smartphone oben erscheint
         trainsToNotify.reversed().forEach { (index, train) ->
