@@ -311,10 +311,28 @@ class TrainViewModel(
         .filter { (!it.placeId.startsWith("9900")) && (it.name !in listOf("Bari Centrale", "Roma Termini", "Firenze S.M.N.", "Verona Porta Nuova", "Milano Centrale", "Venezia Santa Lucia", "Ancona", "Napoli Centrale", "Bologna Centrale", "Rovereto", "Ala")) }
         .sortedBy { it.name }.toList()
 
+    private var previousState: UIState? = null
+
     fun openSettings() { _showSettings.value = true }
     fun closeSettings() { _showSettings.value = false }
     fun selectTrain(train: TrainInfo?) { _selectedTrain.value = train }
-    fun showCustomSearch(from: StationData, to: StationData) { _uiState.value = UIState.CustomSearch(from, to) }
+    fun showCustomSearch(from: StationData, to: StationData) {
+        if (_uiState.value !is UIState.CustomSearch) {
+            previousState = _uiState.value
+        }
+        _uiState.value = UIState.CustomSearch(from, to)
+    }
+
+    fun cancelDialog() {
+        val prev = previousState
+        if ((prev != null) && (prev !is UIState.Loading)) {
+            _uiState.value = prev
+        } else {
+            val home = getSelectedStation("home_station", "Brixen / Bressanone")
+            val work = getSelectedStation("work_station", "Bozen / Bolzano")
+            fetchTrains(home, work)
+        }
+    }
 
     private fun loadStationsFromAssets(): List<StationData> {
         return try {
@@ -406,12 +424,14 @@ fun TrainApp(
         BatteryOptimizationDialog { showBatteryDialog = false }
     }
 
-    // Handle back button for bottom sheet and settings
-    BackHandler(enabled = selectedTrain != null || showSettings) {
+    // Handle back button for bottom sheet, settings, and dialogs
+    BackHandler(enabled = selectedTrain != null || showSettings || uiState is UIState.CustomSearch || uiState is UIState.LocationSelection) {
         if (selectedTrain != null) {
             viewModel.selectTrain(null)
         } else if (showSettings) {
             viewModel.closeSettings()
+        } else if (uiState is UIState.CustomSearch || uiState is UIState.LocationSelection) {
+            viewModel.cancelDialog()
         }
     }
 
@@ -432,13 +452,13 @@ fun TrainApp(
                     state.detected, state.home, state.work,
                     onTargetSelected = { from, to -> viewModel.fetchTrains(from, to) },
                     onOtherTarget = { from, to -> viewModel.showCustomSearch(from, to) },
-                    onCancel = onFinish,
+                    onCancel = { viewModel.cancelDialog() },
                     viewModel = viewModel,
                 )
                 is UIState.CustomSearch -> CustomSearchDialog(
                     state.from, state.to,
                     onSearch = { from, to -> viewModel.fetchTrains(from, to) },
-                    onCancel = onFinish,
+                    onCancel = { viewModel.cancelDialog() },
                     viewModel = viewModel,
                 )
             }
