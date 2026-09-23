@@ -12,15 +12,22 @@ data class TrainStop(
     val delay: String,
     val isCancelled: Boolean = false,
 ) {
-    fun getEffectiveTime(trainMaxDelay: Int): String {
+    fun getEffectiveTime(isPassed: Boolean = false, trainMaxDelay: Int = 0): String {
         if (isCancelled) return scheduledTime
+        if ((actualTime.isNotEmpty()) && (actualTime != scheduledTime)) {
+            return actualTime
+        }
         val planned = try {
             LocalTime.parse(scheduledTime, DateTimeFormatter.ofPattern("HH:mm"))
         } catch (_: Exception) {
-            return actualTime
+            return actualTime.ifEmpty { scheduledTime }
         }
-        val efaMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
-        val effectiveMins = maxOf(efaMins, trainMaxDelay)
+        val stopMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
+        val effectiveMins = if (isPassed) {
+            stopMins
+        } else {
+            maxOf(stopMins, trainMaxDelay)
+        }
         return if (effectiveMins > 0) {
             planned.plusMinutes(effectiveMins.toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
         } else {
@@ -28,10 +35,14 @@ data class TrainStop(
         }
     }
 
-    fun getEffectiveDelay(trainMaxDelay: Int): String {
+    fun getEffectiveDelay(isPassed: Boolean = false, trainMaxDelay: Int = 0): String {
         if (isCancelled) return "entfällt"
-        val efaMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
-        val effectiveMins = maxOf(efaMins, trainMaxDelay)
+        val stopMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
+        val effectiveMins = if (isPassed) {
+            stopMins
+        } else {
+            maxOf(stopMins, trainMaxDelay)
+        }
         return if (effectiveMins > 0) "+$effectiveMins Min." else "pünktlich"
     }
 }

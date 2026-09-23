@@ -752,7 +752,7 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
             } else {
                 val lastPassedStop = train.stops.getOrNull(lastPassedIndex)
                 if (lastPassedStop != null) {
-                    val isDelayed = lastPassedStop.getEffectiveDelay(train.maxDelayMinutes) != "pünktlich" && !lastPassedStop.isCancelled
+                    val isDelayed = lastPassedStop.getEffectiveDelay(isPassed = true, trainMaxDelay = train.maxDelayMinutes) != "pünktlich" && !lastPassedStop.isCancelled
                     val posColor = if (isDelayed || lastPassedStop.isCancelled) Color.Red else Color.Gray
                     
                     Text(
@@ -826,8 +826,8 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
                                     Text(text = "Geplant: ${stop.scheduledTime}", style = MaterialTheme.typography.bodySmall)
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
-                                    val effTime = stop.getEffectiveTime(train.maxDelayMinutes)
-                                    val effDelay = stop.getEffectiveDelay(train.maxDelayMinutes)
+                                    val effTime = stop.getEffectiveTime(isPassed = isPassed, trainMaxDelay = train.maxDelayMinutes)
+                                    val effDelay = stop.getEffectiveDelay(isPassed = isPassed, trainMaxDelay = train.maxDelayMinutes)
                                     
                                     val showDelayInfo = when {
                                         stop.isCancelled -> true

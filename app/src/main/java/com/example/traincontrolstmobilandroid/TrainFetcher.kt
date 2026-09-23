@@ -663,15 +663,24 @@ class TrainFetcher(context: Context) {
                                     Instant.ofEpochMilli(f.optLong("arrivo_teorico")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
                                         DateTimeFormatter.ofPattern("HH:mm"))
                                 }
+                                var delayVal = f.optInt("ritardo", f.optInt("ritardoPartenza", f.optInt("ritardoArrivo", 0)))
+                                if (delayVal <= 0 && f.optLong("partenzaReale") > 0 && f.optLong("partenza_teorica") > 0) {
+                                    val diffSec = (f.optLong("partenzaReale") - f.optLong("partenza_teorica")) / 1000
+                                    if (diffSec >= 60) {
+                                        delayVal = (diffSec / 60).toInt()
+                                    }
+                                }
+
                                 val aTime = if (f.optLong("partenzaReale") > 0) {
                                     Instant.ofEpochMilli(f.optLong("partenzaReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
                                         DateTimeFormatter.ofPattern("HH:mm"))
                                 } else if (f.optLong("arrivoReale") > 0) {
                                     Instant.ofEpochMilli(f.optLong("arrivoReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
                                         DateTimeFormatter.ofPattern("HH:mm"))
+                                } else if (delayVal > 0) {
+                                    TrainInfo.parseLocalTime(sTime)?.plusMinutes(delayVal.toLong())?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: sTime
                                 } else sTime
                                 
-                                val delayVal = f.optInt("ritardo", 0)
                                 val dStr = if (delayVal > 0) "+$delayVal Min." else "pünktlich"
                                 val isCancelledStop = f.optInt("actualFermataType") == 3
                                 vtStops.add(TrainStop(sName, sTime, aTime, dStr, isCancelledStop))
