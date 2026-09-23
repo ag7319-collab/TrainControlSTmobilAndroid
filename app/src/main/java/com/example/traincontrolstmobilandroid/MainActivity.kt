@@ -278,11 +278,19 @@ class TrainViewModel(
         }
     }
 
-    fun fetchTrains(from: StationData, to: StationData) {
+    fun fetchTrains(from: StationData, to: StationData, forceRefresh: Boolean = false) {
+        if (!forceRefresh) {
+            val cached = trainFetcher.getCachedTrains(from.name, to.name)
+            if (cached != null) {
+                _uiState.value = UIState.Results(from, to, cached)
+                return
+            }
+        }
+
         _uiState.value = UIState.Loading()
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val trains = trainFetcher.fetchAndParseTrains(from, to) { msg ->
+                val trains = trainFetcher.fetchAndParseTrains(from, to, forceRefresh) { msg ->
                     _uiState.value = UIState.Loading(msg)
                 }
                 _uiState.value = UIState.Results(from, to, trains)
@@ -416,7 +424,7 @@ fun TrainApp(
                     onOpenSettings = { viewModel.openSettings() },
                     onFinish = onFinish,
                     onChangeStation = { viewModel.showCustomSearch(state.from, state.to) },
-                    onRefresh = { viewModel.fetchTrains(state.from, state.to) },
+                    onRefresh = { viewModel.fetchTrains(state.from, state.to, forceRefresh = true) },
                 ) {
                     viewModel.selectTrain(it)
                 }

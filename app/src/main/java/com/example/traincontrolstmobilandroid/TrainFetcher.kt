@@ -2,6 +2,7 @@ package com.example.traincontrolstmobilandroid
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,11 +18,28 @@ class TrainFetcher(context: Context) {
 
     private val prefs: SharedPreferences = context.getSharedPreferences("TrainControlSTmobilPrefs", Context.MODE_PRIVATE)
 
+    private data class CacheEntry(
+        val fromName: String,
+        val toName: String,
+        val timestamp: Long,
+        val trains: List<TrainInfo>,
+    )
+
+    @Volatile
+    private var cacheEntry: CacheEntry? = null
+
     suspend fun fetchAndParseTrains(
         fromStation: StationData,
         targetStation: StationData,
+        forceRefresh: Boolean = false,
         onProgress: (String) -> Unit = {},
     ): List<TrainInfo> {
+        if (!forceRefresh) {
+            val cached = getCachedTrains(fromStation.name, targetStation.name)
+            if (cached != null) {
+                return cached
+            }
+        }
         val rawTrainList = mutableListOf<TrainInfo>()
         val limit = 10
         val internalLimit = 25
@@ -435,7 +453,7 @@ class TrainFetcher(context: Context) {
         }
 
         // Final filtering: remove trains that have truly departed based on updated delay info
-        return rawTrainList.asSequence().filter { train ->
+        val finalTrains = rawTrainList.asSequence().filter { train ->
             if (train.stopsAtTarget == false) return@filter false
             val bestRealTime = getBestRealTime(train) ?: train.time
             val actual = TrainInfo.calculateActualDateTime(
@@ -446,6 +464,126 @@ class TrainFetcher(context: Context) {
             // Show trains until 2 minutes after their (possibly delayed) departure
             actual.isAfter(now.minusMinutes(2))
         }.sortedWith(compareBy({ it.planDate }, { it.time })).take(limit).toList()
+
+        val entry = CacheEntry(
+            fromName = fromStation.name,
+            toName = targetStation.name,
+            timestamp = System.currentTimeMillis(),
+            trains = finalTrains,
+        )
+        cacheEntry = entry
+        serializeCache(fromStation.name, targetStation.name, finalTrains)
+
+        return finalTrains
+    }
+
+    fun getCachedTrains(fromName: String, toName: String): List<TrainInfo>? {
+        var entry = cacheEntry
+        if (entry == null) {
+            entry = loadCacheFromPrefs()
+            cacheEntry = entry
+        }
+        if (entry == null) return null
+
+        if (entry.fromName == fromName &&
+            entry.toName == toName &&
+            (System.currentTimeMillis() - entry.timestamp) < 120_000
+        ) {
+            return entry.trains
+        }
+        return null
+    }
+
+    private fun serializeCache(fromName: String, toName: String, trains: List<TrainInfo>) {
+        try {
+            val root = JSONObject()
+            root.put("from", fromName)
+            root.put("to", toName)
+            root.put("time", System.currentTimeMillis())
+            val array = JSONArray()
+            for (train in trains) {
+                val obj = JSONObject()
+                obj.put("categoryNumber", train.categoryNumber)
+                obj.put("destination", train.destination)
+                obj.put("time", train.time)
+                obj.put("delay", train.delay)
+                obj.put("platform", train.platform)
+                obj.put("hasDelay", train.hasDelay)
+                obj.put("isBus", train.isBus)
+                train.stopsAtTarget?.let { obj.put("stopsAtTarget", it) }
+                train.rfiDelay?.let { obj.put("rfiDelay", it) }
+                train.rfiStatus?.let { obj.put("rfiStatus", it) }
+                train.vtDelay?.let { obj.put("vtDelay", it) }
+                train.vtStatus?.let { obj.put("vtStatus", it) }
+                train.lineOrigin?.let { obj.put("lineOrigin", it) }
+                train.lineTerminal?.let { obj.put("lineTerminal", it) }
+                train.planDate?.let { obj.put("planDate", it) }
+                train.uniqueRID?.let { obj.put("uniqueRID", it) }
+
+                val stopsArray = JSONArray()
+                for (stop in train.stops) {
+                    val sObj = JSONObject()
+                    sObj.put("name", stop.name)
+                    sObj.put("scheduledTime", stop.scheduledTime)
+                    sObj.put("actualTime", stop.actualTime)
+                    sObj.put("delay", stop.delay)
+                    sObj.put("isCancelled", stop.isCancelled)
+                    stopsArray.put(sObj)
+                }
+                obj.put("stops", stopsArray)
+                array.put(obj)
+            }
+            root.put("trains", array)
+            prefs.edit { putString("train_cache_v1", root.toString()) }
+        } catch (_: Exception) { }
+    }
+
+    private fun loadCacheFromPrefs(): CacheEntry? {
+        try {
+            val jsonStr = prefs.getString("train_cache_v1", null) ?: return null
+            val root = JSONObject(jsonStr)
+            val fromName = root.getString("from")
+            val toName = root.getString("to")
+            val timestamp = root.getLong("time")
+            val array = root.getJSONArray("trains")
+
+            val trains = List(array.length()) { i ->
+                val obj = array.getJSONObject(i)
+                val stopsArray = obj.optJSONArray("stops") ?: JSONArray()
+                val stops = List(stopsArray.length()) { j ->
+                    val sObj = stopsArray.getJSONObject(j)
+                    TrainStop(
+                        name = sObj.getString("name"),
+                        scheduledTime = sObj.getString("scheduledTime"),
+                        actualTime = sObj.getString("actualTime"),
+                        delay = sObj.getString("delay"),
+                        isCancelled = sObj.optBoolean("isCancelled", false)
+                    )
+                }
+                TrainInfo(
+                    categoryNumber = obj.getString("categoryNumber"),
+                    destination = obj.getString("destination"),
+                    time = obj.getString("time"),
+                    delay = obj.getString("delay"),
+                    platform = obj.getString("platform"),
+                    hasDelay = obj.getBoolean("hasDelay"),
+                    isBus = obj.optBoolean("isBus", false),
+                    stopsAtTarget = if (obj.has("stopsAtTarget")) obj.getBoolean("stopsAtTarget") else null,
+                    rfiDelay = obj.optString("rfiDelay").takeIf { it.isNotEmpty() },
+                    rfiStatus = obj.optString("rfiStatus").takeIf { it.isNotEmpty() },
+                    vtDelay = obj.optString("vtDelay").takeIf { it.isNotEmpty() },
+                    vtStatus = obj.optString("vtStatus").takeIf { it.isNotEmpty() },
+                    lineOrigin = obj.optString("lineOrigin").takeIf { it.isNotEmpty() },
+                    lineTerminal = obj.optString("lineTerminal").takeIf { it.isNotEmpty() },
+                    planDate = obj.optString("planDate").takeIf { it.isNotEmpty() },
+                    uniqueRID = obj.optString("uniqueRID").takeIf { it.isNotEmpty() },
+                    stops = stops
+                )
+            }
+            return CacheEntry(fromName, toName, timestamp, trains)
+        } catch (_: Exception) {
+            return null
+        }
     }
 
     private fun getBestRealTime(train: TrainInfo): String? {

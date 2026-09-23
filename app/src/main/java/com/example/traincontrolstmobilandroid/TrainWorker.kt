@@ -39,7 +39,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         }
 
         val trains = try {
-            trainFetcher.fetchAndParseTrains(fromStation, toStation)
+            trainFetcher.fetchAndParseTrains(fromStation, toStation, forceRefresh = true)
         } catch (_: Exception) {
             emptyList()
         }
