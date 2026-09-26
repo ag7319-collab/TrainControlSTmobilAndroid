@@ -11,10 +11,12 @@ data class TrainStop(
     val actualTime: String,
     val delay: String,
     val isCancelled: Boolean = false,
+    val isPassed: Boolean? = null,
 ) {
     fun getEffectiveTime(isPassed: Boolean = false, trainMaxDelay: Int = 0): String {
         if (isCancelled) return scheduledTime
-        if ((actualTime.isNotEmpty()) && (actualTime != scheduledTime)) {
+        val usePassed = this.isPassed ?: isPassed
+        if (usePassed && (actualTime.isNotEmpty()) && (actualTime != scheduledTime)) {
             return actualTime
         }
         val planned = try {
@@ -23,7 +25,7 @@ data class TrainStop(
             return actualTime.ifEmpty { scheduledTime }
         }
         val stopMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
-        val effectiveMins = if (isPassed) {
+        val effectiveMins = if (usePassed) {
             stopMins
         } else {
             maxOf(stopMins, trainMaxDelay)
@@ -37,8 +39,9 @@ data class TrainStop(
 
     fun getEffectiveDelay(isPassed: Boolean = false, trainMaxDelay: Int = 0): String {
         if (isCancelled) return "entfällt"
+        val usePassed = this.isPassed ?: isPassed
         val stopMins = delay.filter { it.isDigit() }.toIntOrNull() ?: 0
-        val effectiveMins = if (isPassed) {
+        val effectiveMins = if (usePassed) {
             stopMins
         } else {
             maxOf(stopMins, trainMaxDelay)
@@ -160,7 +163,8 @@ data class TrainInfo(
         }.takeIf { it.isNotEmpty() }
 
     fun getActualDateTimeForStop(stop: TrainStop): LocalDateTime {
-        return calculateActualDateTime(planDate ?: "", stop.scheduledTime, stop.actualTime)
+        val effTime = stop.getEffectiveTime(stop.isPassed ?: false, maxDelayMinutes)
+        return calculateActualDateTime(planDate ?: "", stop.scheduledTime, effTime)
     }
 
     companion object {

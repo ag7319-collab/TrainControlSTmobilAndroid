@@ -721,11 +721,13 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
 
             val origin = cleanStationName(train.lineOrigin ?: train.extractedLineOrigin ?: train.stops.firstOrNull()?.name ?: "?")
             val dest = cleanStationName(train.lineTerminal ?: train.destination)
-            val isNotOnViaggiaTreno = train.vtStatus == null && !train.isBus
-            val sadSuffix = if (isNotOnViaggiaTreno) " (SAD)" else ""
+            val isSad = train.categoryNumber.contains("SAD", ignoreCase = true) || (train.uniqueRID?.contains("SAD", ignoreCase = true) == true)
+            val sadSuffix = if (isSad) " (SAD)" else ""
             
             val now = LocalDateTime.now()
-            val lastPassedIndex = train.stops.indexOfLast { train.getActualDateTimeForStop(it).isBefore(now) }
+            val lastPassedIndex = train.stops.indexOfLast { stop ->
+                stop.isPassed == true || ((stop.isPassed != false) && train.getActualDateTimeForStop(stop).isBefore(now))
+            }
             val hasNotStarted = lastPassedIndex == -1 && !train.isCancelled
 
             Text(
@@ -771,7 +773,7 @@ fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
             
             LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
                 itemsIndexed(train.stops) { index, stop ->
-                    val isPassed = index <= lastPassedIndex
+                    val isPassed = stop.isPassed ?: (index <= lastPassedIndex)
                     val isLastPassed = index == lastPassedIndex
                     val isNext = index == lastPassedIndex + 1
 
