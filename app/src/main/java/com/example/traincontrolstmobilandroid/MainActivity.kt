@@ -977,7 +977,7 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                 AlarmSpinner(alarmCount) { alarmCount = it }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("Update-Zeiten", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                val workGerman = if (useGpsWork) "GPS-Standort" else if (workStation == "Bahnhof wählen...") "Arbeitsort" else workStation.split("/").first().trim()
+                val workGerman = if (workStation == "Bahnhof wählen...") "Arbeitsort" else workStation.split("/").first().trim()
                 val homeGerman = if (homeStation == "Bahnhof wählen...") "Heimatort" else homeStation.split("/").first().trim()
                 TimerSection("Nach $workGerman", timer1Enabled, timer1Hour, timer1Minute, timer1Days)
                 TimerSection("", timer3Enabled, timer3Hour, timer3Minute, timer3Days, showMasterCheckbox = false)
