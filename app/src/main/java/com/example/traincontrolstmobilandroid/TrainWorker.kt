@@ -32,6 +32,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
 
         val allStations = loadStationsFromAssets(applicationContext)
 
+        var gpsAtHome = false
         if (useGpsWork && ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             try {
                 val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
@@ -44,9 +45,13 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                             Location.distanceBetween(location.latitude, location.longitude, it.lat, it.lon, res)
                             res[0]
                         }
-                    if (currentStation != null && currentStation.name != homeStationName) {
-                        workStationName = currentStation.name
-                        prefs.edit { putString("work_station", currentStation.name) }
+                    if (currentStation != null) {
+                        if (currentStation.name != homeStationName) {
+                            workStationName = currentStation.name
+                            prefs.edit { putString("work_station", currentStation.name) }
+                        } else {
+                            gpsAtHome = true
+                        }
                     }
                 }
             } catch (_: Exception) { }
@@ -56,8 +61,20 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val workStation = allStations.firstOrNull { it.name == workStationName } ?: return@withContext Result.failure()
 
         val timerIndex = inputData.getInt("timer_index", 1)
+
+        // Wenn GPS als Arbeitsadresse verwendet wird und der aktuelle GPS-Standort der Heimadresse entspricht,
+        // soll bei der Heimfahrt (Timer 2/4) keine Benachrichtigung gesendet werden, da der Nutzer bereits zuhause ist.
+        val isReturnHomeTimer = (timerIndex == 2) || (timerIndex == 4)
+        if (useGpsWork && gpsAtHome && isReturnHomeTimer) {
+            return@withContext Result.success()
+        }
+
         val fromStation = if ((timerIndex == 1) || (timerIndex == 3)) homeStation else workStation
         val toStation = if ((timerIndex == 1) || (timerIndex == 3)) workStation else homeStation
+
+        if (fromStation.name == toStation.name) {
+            return@withContext Result.success()
+        }
 
         // Internet-Check vor der Abfrage
         if (!isNetworkAvailable()) {

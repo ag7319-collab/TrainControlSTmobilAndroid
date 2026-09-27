@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.app.ActivityCompat
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
@@ -144,13 +145,13 @@ fun BatteryOptimizationDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Energieeinstellungen") },
+        title = { Text("Hintergrundaktivität & Akku") },
         text = {
             Column {
-                Text("Damit die App auch im Hintergrund zuverlässig über Verspätungen informieren kann, muss die Akku-Optimierung deaktiviert werden (Einstellung 'Nicht eingeschränkt').")
+                Text("Damit Abfahrten und Verspätungen im Hintergrund zuverlässig abgerufen werden, stelle die Akkunutzung für diese App bitte auf 'Uneingeschränkt' (Nicht optimiert).")
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Samsung-Nutzer: Bitte die App zusätzlich unter 'Grenzen der Hintergrundnutzung' als 'Nie im Standby befindliche App' hinzufügen.",
+                    text = "Hinweis für Tablets & Samsung: Tippe unten auf 'App-Info öffnen', wähle dort 'Akku' und stelle die Hintergrundaktivität auf 'Uneingeschränkt'.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -161,16 +162,22 @@ fun BatteryOptimizationDialog(onDismiss: () -> Unit) {
             Button(
                 onClick = {
                     try {
-                        // Play Store konforme Methode: Liste der Einstellungen öffnen
-                        val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = "package:${context.packageName}".toUri()
+                        }
                         context.startActivity(intent)
                     } catch (_: Exception) {
-                        Toast.makeText(context, "Einstellungen konnten nicht geöffnet werden", Toast.LENGTH_SHORT).show()
+                        try {
+                            val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            Toast.makeText(context, "Einstellungen konnten nicht geöffnet werden", Toast.LENGTH_SHORT).show()
+                        }
                     }
                     onDismiss()
                 }
             ) {
-                Text("Einstellung öffnen")
+                Text("App-Info öffnen")
             }
         },
         dismissButton = {
@@ -936,11 +943,22 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
             Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
                 Text("Einstellungen", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
+                
                 Text("Heimatbahnhof", fontWeight = FontWeight.Bold)
-                StationSpinner(stationNames, homeStation) { homeStation = it }
+                StationSpinner(stationNames, homeStation) { chosen ->
+                    if (!useGpsWork && chosen == workStation) {
+                        workStation = "Bahnhof wählen..."
+                    }
+                    homeStation = chosen
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Arbeitsbahnhof", fontWeight = FontWeight.Bold)
-                StationSpinner(stationNames, workStation, enabled = !useGpsWork) { workStation = it }
+                StationSpinner(stationNames, workStation, enabled = !useGpsWork) { chosen ->
+                    if (chosen == homeStation) {
+                        homeStation = "Bahnhof wählen..."
+                    }
+                    workStation = chosen
+                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -959,8 +977,8 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                 AlarmSpinner(alarmCount) { alarmCount = it }
                 Spacer(modifier = Modifier.height(24.dp))
                 Text("Update-Zeiten", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                val workGerman = workStation.split("/").first().trim()
-                val homeGerman = homeStation.split("/").first().trim()
+                val workGerman = if (useGpsWork) "GPS-Standort" else if (workStation == "Bahnhof wählen...") "Arbeitsort" else workStation.split("/").first().trim()
+                val homeGerman = if (homeStation == "Bahnhof wählen...") "Heimatort" else homeStation.split("/").first().trim()
                 TimerSection("Nach $workGerman", timer1Enabled, timer1Hour, timer1Minute, timer1Days)
                 TimerSection("", timer3Enabled, timer3Hour, timer3Minute, timer3Days, showMasterCheckbox = false)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -981,8 +999,8 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                     TextButton(onClick = onDismiss) { Text("Abbrechen") }
                     Button(
                         onClick = {
-                            if (!useGpsWork && homeStation == workStation) {
-                                Toast.makeText(context, "Stationen identisch!", Toast.LENGTH_SHORT).show()
+                            if (homeStation == "Bahnhof wählen..." || (!useGpsWork && (workStation == "Bahnhof wählen..." || homeStation == workStation))) {
+                                Toast.makeText(context, "Bitte zwei verschiedene Bahnhöfe wählen!", Toast.LENGTH_SHORT).show()
                             } else {
                                 prefs.edit {
                                     putString("home_station", homeStation)
@@ -1165,9 +1183,11 @@ fun AlarmSpinner(selected: Int, onSelected: (Int) -> Unit) {
 
 @Composable
 fun LocationStationDialog(detected: StationData, home: StationData, work: StationData, onTargetSelected: (StationData, StationData) -> Unit, onOtherTarget: (StationData, StationData) -> Unit, onCancel: () -> Unit, viewModel: TrainViewModel) {
+    val context = LocalContext.current
     val stations = viewModel.getSelectableRegionalStations()
     val names = stations.map { it.name }
     var from by remember { mutableStateOf(detected) }
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Standort: ${detected.name.split("/").first().trim()}") },
@@ -1180,14 +1200,26 @@ fun LocationStationDialog(detected: StationData, home: StationData, work: Statio
                 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { onTargetSelected(from, work) },
+                        onClick = { 
+                            if (from.name == work.name) {
+                                Toast.makeText(context, "Abfahrts- und Zielbahnhof sind identisch.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onTargetSelected(from, work) 
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Nach ${work.name.split("/").first().trim()}")
                     }
                     
                     Button(
-                        onClick = { onTargetSelected(from, home) },
+                        onClick = { 
+                            if (from.name == home.name) {
+                                Toast.makeText(context, "Abfahrts- und Zielbahnhof sind identisch.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onTargetSelected(from, home) 
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Nach ${home.name.split("/").first().trim()}")
@@ -1202,43 +1234,66 @@ fun LocationStationDialog(detected: StationData, home: StationData, work: Statio
                 }
             }
         },
-    confirmButton = {
-        TextButton(onClick = onCancel) {
-            Text("Abbrechen")
-        }
-    },
-)
+        confirmButton = {
+            TextButton(onClick = onCancel) {
+                Text("Abbrechen")
+            }
+        },
+    )
 }
 
 @Composable
 fun CustomSearchDialog(from: StationData, to: StationData, onSearch: (StationData, StationData) -> Unit, onCancel: () -> Unit, viewModel: TrainViewModel) {
+    val context = LocalContext.current
     val stations = viewModel.getSelectableRegionalStations()
     val names = stations.map { it.name }
-    var sFrom by remember { mutableStateOf(from) }
-    var sTo by remember { mutableStateOf(to) }
+    
+    var sFromName by remember { mutableStateOf(from.name) }
+    var sToName by remember { mutableStateOf(if (to.name == from.name) "Bahnhof wählen..." else to.name) }
+
     AlertDialog(
         onDismissRequest = onCancel,
         title = { Text("Route wählen") },
         text = {
             Column {
-            Text("Abfahrt", fontWeight = FontWeight.Bold)
-            StationSpinner(names, sFrom.name) { n -> sFrom = stations.first { it.name == n } }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Ziel", fontWeight = FontWeight.Bold)
-            StationSpinner(names, sTo.name) { n -> sTo = stations.first { it.name == n } }
+                Text("Abfahrt", fontWeight = FontWeight.Bold)
+                StationSpinner(names, sFromName) { chosen -> 
+                    if (chosen == sToName) {
+                        sToName = "Bahnhof wählen..."
+                    }
+                    sFromName = chosen
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Ziel", fontWeight = FontWeight.Bold)
+                StationSpinner(names, sToName) { chosen -> 
+                    if (chosen == sFromName) {
+                        sFromName = "Bahnhof wählen..."
+                    }
+                    sToName = chosen
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { 
+                    val selectedFrom = stations.firstOrNull { it.name == sFromName }
+                    val selectedTo = stations.firstOrNull { it.name == sToName }
+                    if (selectedFrom == null || selectedTo == null || sFromName == sToName) {
+                        Toast.makeText(context, "Bitte zwei verschiedene Bahnhöfe wählen!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        onSearch(selectedFrom, selectedTo) 
+                    }
+                }
+            ) {
+                Text("Suchen")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text("Abbrechen")
+            }
         }
-    },
-    confirmButton = {
-        Button(onClick = { onSearch(sFrom, sTo) }) {
-            Text("Suchen")
-        }
-    },
-    dismissButton = {
-        TextButton(onClick = onCancel) {
-            Text("Abbrechen")
-        }
-    }
-)
+    )
 }
 
 fun getTrainTypeLabel(cat: String): String {
