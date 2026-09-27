@@ -7,11 +7,13 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 class TrainFetcher(context: Context) {
@@ -273,14 +275,22 @@ class TrainFetcher(context: Context) {
                     val rfiDeferred = async(Dispatchers.IO) {
                         onProgress("Abfrage RFI Tabellone")
                         val rfiUrl = "https://iechub.rfi.it/ArriviPartenze/arrivalsdepartures/Monitor?placeId=${fromStation.placeId}&arrivals=False"
-                        try {
-                            Jsoup.connect(rfiUrl)
-                                .timeout(10000)
-                                .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-                                .get()
-                        } catch (_: Exception) {
-                            null
+                        var doc: Document? = null
+                        for (attempt in 1..2) {
+                            try {
+                                val fetchedDoc = Jsoup.connect(rfiUrl)
+                                    .timeout(8000)
+                                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+                                    .get()
+                                doc = fetchedDoc
+                                if (fetchedDoc.select("tr").isNotEmpty()) break
+                            } catch (_: Exception) {
+                                if (attempt == 1) {
+                                    delay(400.milliseconds)
+                                }
+                            }
                         }
+                        doc
                     }
 
                     Pair(efaDeferreds.awaitAll(), rfiDeferred.await())
@@ -605,198 +615,212 @@ class TrainFetcher(context: Context) {
         val num = train.categoryNumber.filter { it.isDigit() }
         if (num.isBlank()) return train
 
-        try {
-            // 1. Suche Zug für ID (Logik aus TreniRT: verwende infomobilita Endpoint)
-            val searchUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
-            var searchRes = try {
-                Jsoup.connect(searchUrl)
-                    .ignoreContentType(true)
-                    .timeout(10000)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-                    .execute()
-                    .body()
-                    .trim()
-            } catch (_: Exception) { "" }
-
-            if (searchRes.isBlank() || (!searchRes.contains("|") && !searchRes.startsWith("{"))) {
-                val fallbackUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTreno/$num"
-                searchRes = try {
-                    Jsoup.connect(fallbackUrl)
+        for (attempt in 1..2) {
+            try {
+                // 1. Suche Zug für ID (Logik aus TreniRT: verwende infomobilita Endpoint)
+                val searchUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
+                var searchRes = try {
+                    Jsoup.connect(searchUrl)
                         .ignoreContentType(true)
-                        .timeout(10000)
+                        .timeout(8000)
                         .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
                         .execute()
                         .body()
                         .trim()
                 } catch (_: Exception) { "" }
-            }
 
-            var trainNum = ""
-            var originId = ""
-            var referenceDay = ""
-
-            if (searchRes.startsWith("{")) {
-                val obj = JSONObject(searchRes)
-                trainNum = obj.optString("numeroTreno").ifEmpty { num }
-                originId = obj.optString("codOrigine")
-            } else if (searchRes.startsWith("[")) {
-                val arr = JSONArray(searchRes)
-                if (arr.length() > 0) {
-                    val obj = arr.getJSONObject(0)
-                    trainNum = obj.optString("numeroTreno").ifEmpty { num }
-                    originId = obj.optString("codOrigine")
-                }
-            } else if (searchRes.contains("|")) {
-                val line = searchRes.lines().firstOrNull { it.contains("|") }
-                if (line != null) {
-                    val parts = line.split("|")
-                    if (parts.size >= 2) {
-                        val meta = parts[1]
-                        val metaParts = meta.split("-")
-                        trainNum = metaParts.getOrNull(0)?.trim() ?: ""
-                        originId = metaParts.getOrNull(1)?.trim() ?: ""
-                        referenceDay = metaParts.getOrNull(2)?.trim() ?: ""
-                    }
-                }
-            }
-
-            if (trainNum.isNotEmpty() && originId.isNotEmpty()) {
-                        // 2. Andamento abfragen (mit referenceDay zur Disambiguierung)
-                        val andamentoUrl = if (referenceDay.isNotEmpty()) {
-                            "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum/$referenceDay"
-                        } else {
-                            "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum"
-                        }
-                        
-                        val andamentoRes = Jsoup.connect(andamentoUrl)
+                if (searchRes.isBlank() || (!searchRes.contains("|") && !searchRes.startsWith("{"))) {
+                    val fallbackUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTreno/$num"
+                    searchRes = try {
+                        Jsoup.connect(fallbackUrl)
                             .ignoreContentType(true)
-                            .timeout(10000)
+                            .timeout(8000)
                             .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
                             .execute()
                             .body()
-                        
-                        val andamentoJson = JSONObject(andamentoRes)
-                        val ritardo = andamentoJson.optInt("ritardo", -999)
-                        val provvedimento = andamentoJson.optInt("provvedimento", 0)
-                        val isSopresso = (provvedimento != 0) || andamentoJson.optBoolean("provvedimento", false)
-                        
-                        val vtOrigin = andamentoJson.optString("origine").takeIf { it.isNotEmpty() }
-                        val vtDest = andamentoJson.optString("destinazione").takeIf { it.isNotEmpty() }
-                        
-                        // Fetch full stop list from ViaggiaTreno
-                        val vtStops = mutableListOf<TrainStop>()
-                        val fermateArray = andamentoJson.optJSONArray("fermate")
-                        if (fermateArray != null) {
-                            for (j in 0 until fermateArray.length()) {
-                                val f = fermateArray.getJSONObject(j)
-                                val sName = f.optString("stazione").split("/").first().trim()
-                                val sTime = if (f.optLong("partenza_teorica") > 0) {
-                                    Instant.ofEpochMilli(f.optLong("partenza_teorica")).atZone(
-                                        ZoneId.of("Europe/Rome")).toLocalTime().format(
-                                        DateTimeFormatter.ofPattern("HH:mm"))
-                                } else {
-                                    Instant.ofEpochMilli(f.optLong("arrivo_teorico")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
-                                        DateTimeFormatter.ofPattern("HH:mm"))
-                                }
-                                val fermataType = f.optInt("actualFermataType", -1)
-                                val hasRealDeparture = f.optLong("partenzaReale") > 0
-                                val hasRealArrival = f.optLong("arrivoReale") > 0
-                                val isStopPassed = (fermataType == 1) || hasRealDeparture || hasRealArrival
+                            .trim()
+                    } catch (_: Exception) { "" }
+                }
 
-                                var delayVal = f.optInt("ritardo", f.optInt("ritardoPartenza", f.optInt("ritardoArrivo", 0)))
-                                if (delayVal <= 0 && hasRealDeparture && f.optLong("partenza_teorica") > 0) {
-                                    val diffSec = (f.optLong("partenzaReale") - f.optLong("partenza_teorica")) / 1000
-                                    if (diffSec >= 60) {
-                                        delayVal = (diffSec / 60).toInt()
-                                    }
-                                }
+                var trainNum = ""
+                var originId = ""
+                var referenceDay = ""
 
-                                if (!isStopPassed && delayVal <= 0 && ritardo > 0) {
-                                    delayVal = ritardo
-                                }
+                if (searchRes.startsWith("{")) {
+                    val obj = JSONObject(searchRes)
+                    trainNum = obj.optString("numeroTreno").ifEmpty { num }
+                    originId = obj.optString("codOrigine")
+                } else if (searchRes.startsWith("[")) {
+                    val arr = JSONArray(searchRes)
+                    if (arr.length() > 0) {
+                        val obj = arr.getJSONObject(0)
+                        trainNum = obj.optString("numeroTreno").ifEmpty { num }
+                        originId = obj.optString("codOrigine")
+                    }
+                } else if (searchRes.contains("|")) {
+                    val line = searchRes.lines().firstOrNull { it.contains("|") }
+                    if (line != null) {
+                        val parts = line.split("|")
+                        if (parts.size >= 2) {
+                            val meta = parts[1]
+                            val metaParts = meta.split("-")
+                            trainNum = metaParts.getOrNull(0)?.trim() ?: ""
+                            originId = metaParts.getOrNull(1)?.trim() ?: ""
+                            referenceDay = metaParts.getOrNull(2)?.trim() ?: ""
+                        }
+                    }
+                }
 
-                                val aTime = if (hasRealDeparture) {
-                                    Instant.ofEpochMilli(f.optLong("partenzaReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
-                                        DateTimeFormatter.ofPattern("HH:mm"))
-                                } else if (hasRealArrival) {
-                                    Instant.ofEpochMilli(f.optLong("arrivoReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
-                                        DateTimeFormatter.ofPattern("HH:mm"))
-                                } else if (delayVal > 0) {
-                                    TrainInfo.parseLocalTime(sTime)?.plusMinutes(delayVal.toLong())?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: sTime
-                                } else sTime
-                                
-                                val dStr = if (delayVal > 0) "+$delayVal Min." else "pünktlich"
-                                val isCancelledStop = fermataType == 3
-                                vtStops.add(TrainStop(sName, sTime, aTime, dStr, isCancelledStop, isPassed = isStopPassed))
+                if (trainNum.isNotEmpty() && originId.isNotEmpty()) {
+                    // 2. Andamento abfragen (mit referenceDay zur Disambiguierung)
+                    val andamentoUrl = if (referenceDay.isNotEmpty()) {
+                        "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum/$referenceDay"
+                    } else {
+                        "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum"
+                    }
+                    
+                    val andamentoRes = Jsoup.connect(andamentoUrl)
+                        .ignoreContentType(true)
+                        .timeout(8000)
+                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
+                        .execute()
+                        .body()
+                    
+                    val andamentoJson = JSONObject(andamentoRes)
+                    val ritardo = andamentoJson.optInt("ritardo", -999)
+                    val provvedimento = andamentoJson.optInt("provvedimento", 0)
+                    val isSopresso = (provvedimento != 0) || andamentoJson.optBoolean("provvedimento", false)
+                    
+                    val vtOrigin = andamentoJson.optString("origine").takeIf { it.isNotEmpty() }
+                    val vtDest = andamentoJson.optString("destinazione").takeIf { it.isNotEmpty() }
+                    
+                    // Fetch full stop list from ViaggiaTreno
+                    val vtStops = mutableListOf<TrainStop>()
+                    val fermateArray = andamentoJson.optJSONArray("fermate")
+                    if (fermateArray != null) {
+                        for (j in 0 until fermateArray.length()) {
+                            val f = fermateArray.getJSONObject(j)
+                            val sName = f.optString("stazione").split("/").first().trim()
+                            val sTime = if (f.optLong("partenza_teorica") > 0) {
+                                Instant.ofEpochMilli(f.optLong("partenza_teorica")).atZone(
+                                    ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                    DateTimeFormatter.ofPattern("HH:mm"))
+                            } else {
+                                Instant.ofEpochMilli(f.optLong("arrivo_teorico")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                    DateTimeFormatter.ofPattern("HH:mm"))
                             }
-                        }
+                            val fermataType = f.optInt("actualFermataType", -1)
+                            val hasRealDeparture = f.optLong("partenzaReale") > 0
+                            val hasRealArrival = f.optLong("arrivoReale") > 0
+                            val isStopPassed = (fermataType == 1) || hasRealDeparture || hasRealArrival
 
-                        if (isSopresso) {
-                            return train.copy(
-                                vtStatus = "entfällt", 
-                                vtDelay = "", 
-                                lineOrigin = vtOrigin ?: train.lineOrigin, 
-                                lineTerminal = vtDest ?: train.lineTerminal,
-                                stops = vtStops.ifEmpty { train.stops }
-                            )
-                        } else if (ritardo != -999) {
-                            val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
-                            val vtStatus = if (ritardo > 0) "Verspätung" else "pünktlich"
-                            return train.copy(
-                                vtDelay = vtDisplay, 
-                                vtStatus = vtStatus,
-                                lineOrigin = vtOrigin ?: train.lineOrigin, 
-                                lineTerminal = vtDest ?: train.lineTerminal,
-                                stops = vtStops.ifEmpty { train.stops }
-                            )
+                            var delayVal = f.optInt("ritardo", f.optInt("ritardoPartenza", f.optInt("ritardoArrivo", 0)))
+                            if (delayVal <= 0 && hasRealDeparture && f.optLong("partenza_teorica") > 0) {
+                                val diffSec = (f.optLong("partenzaReale") - f.optLong("partenza_teorica")) / 1000
+                                if (diffSec >= 60) {
+                                    delayVal = (diffSec / 60).toInt()
+                                }
+                            }
+
+                            if (!isStopPassed && delayVal <= 0 && ritardo > 0) {
+                                delayVal = ritardo
+                            }
+
+                            val aTime = if (hasRealDeparture) {
+                                Instant.ofEpochMilli(f.optLong("partenzaReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                    DateTimeFormatter.ofPattern("HH:mm"))
+                            } else if (hasRealArrival) {
+                                Instant.ofEpochMilli(f.optLong("arrivoReale")).atZone(ZoneId.of("Europe/Rome")).toLocalTime().format(
+                                    DateTimeFormatter.ofPattern("HH:mm"))
+                            } else if (delayVal > 0) {
+                                TrainInfo.parseLocalTime(sTime)?.plusMinutes(delayVal.toLong())?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: sTime
+                            } else sTime
+                            
+                            val dStr = if (delayVal > 0) "+$delayVal Min." else "pünktlich"
+                            val isCancelledStop = fermataType == 3
+                            vtStops.add(TrainStop(sName, sTime, aTime, dStr, isCancelledStop, isPassed = isStopPassed))
                         }
+                    }
+
+                    val updatedTrain = if (isSopresso) {
+                        train.copy(
+                            vtStatus = "entfällt", 
+                            vtDelay = "", 
+                            lineOrigin = vtOrigin ?: train.lineOrigin, 
+                            lineTerminal = vtDest ?: train.lineTerminal,
+                            stops = vtStops.ifEmpty { train.stops }
+                        )
+                    } else if (ritardo != -999) {
+                        val vtDisplay = if (ritardo >= 0) "+$ritardo" else ritardo.toString()
+                        val vtStatus = if (ritardo > 0) "Verspätung" else "pünktlich"
+                        train.copy(
+                            vtDelay = vtDisplay, 
+                            vtStatus = vtStatus,
+                            lineOrigin = vtOrigin ?: train.lineOrigin, 
+                            lineTerminal = vtDest ?: train.lineTerminal,
+                            stops = vtStops.ifEmpty { train.stops }
+                        )
+                    } else null
+
+                    if (updatedTrain != null) {
+                        return updatedTrain
+                    }
+                }
+            } catch (_: Exception) { }
+            if (attempt == 1) {
+                runCatching { Thread.sleep(250) }
             }
-        } catch (_: Exception) { }
+        }
         return train
     }
 
     private suspend fun fetchFullStopsFromEFA(train: TrainInfo): TrainInfo {
         val rid = train.uniqueRID ?: return train
-        try {
-            val url = "https://efa.sta.bz.it/web/XML_TTR_REQUEST?requestId=1&outputFormat=JSON&assignRID=1&name_tt=$rid"
-            val responseStr = withContext(Dispatchers.IO) {
-                try {
-                    Jsoup.connect(url).ignoreContentType(true).timeout(8000).execute().body()
-                } catch (_: Exception) { null }
-            } ?: return train
-            
-            val root = JSONObject(responseStr)
-            val tt = root.optJSONObject("trainTrip") ?: return train
-            val pointsArray = tt.optJSONArray("stopList") ?: tt.optJSONArray("point") ?: tt.optJSONArray("points") ?: JSONArray()
-            
-            val fullStops = mutableListOf<TrainStop>()
-            for (i in 0 until pointsArray.length()) {
-                val point = pointsArray.getJSONObject(i)
-                val stopName = point.optString("name")
-                val sTime = extractTime(point, listOf("itdTime", "dateTime", "departureTimePlanned", "time", "arrivalTimePlanned")) ?: ""
-                val aTime = extractTime(point, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime", "arrivalTimeEstimated")) ?: sTime
-                val cancelled = (point.optString("isCancelled") == "1") || point.optBoolean("isCancelled", false)
+        for (attempt in 1..2) {
+            try {
+                val url = "https://efa.sta.bz.it/web/XML_TTR_REQUEST?requestId=1&outputFormat=JSON&assignRID=1&name_tt=$rid"
+                val responseStr = withContext(Dispatchers.IO) {
+                    try {
+                        Jsoup.connect(url).ignoreContentType(true).timeout(8000).execute().body()
+                    } catch (_: Exception) { null }
+                } ?: continue
                 
-                var dStr = "pünktlich"
-                if ((aTime != sTime) && sTime.isNotEmpty()) {
-                    val pLT = TrainInfo.parseLocalTime(sTime)
-                    val aLT = TrainInfo.parseLocalTime(aTime)
-                    if ((pLT != null) && (aLT != null)) {
-                        val pT = (pLT.hour * 60) + pLT.minute
-                        var rT = (aLT.hour * 60) + aLT.minute
-                        if ((rT < pT) && ((pT - rT) > 720)) rT += 1440
-                        val dM = rT - pT
-                        if (dM > 0) dStr = "+$dM Min."
+                val root = JSONObject(responseStr)
+                val tt = root.optJSONObject("trainTrip") ?: continue
+                val pointsArray = tt.optJSONArray("stopList") ?: tt.optJSONArray("point") ?: tt.optJSONArray("points") ?: JSONArray()
+                
+                val fullStops = mutableListOf<TrainStop>()
+                for (i in 0 until pointsArray.length()) {
+                    val point = pointsArray.getJSONObject(i)
+                    val stopName = point.optString("name")
+                    val sTime = extractTime(point, listOf("itdTime", "dateTime", "departureTimePlanned", "time", "arrivalTimePlanned")) ?: ""
+                    val aTime = extractTime(point, listOf("itdRTTime", "realDateTime", "departureTimeEstimated", "rtTime", "arrivalTimeEstimated")) ?: sTime
+                    val cancelled = (point.optString("isCancelled") == "1") || point.optBoolean("isCancelled", false)
+                    
+                    var dStr = "pünktlich"
+                    if ((aTime != sTime) && sTime.isNotEmpty()) {
+                        val pLT = TrainInfo.parseLocalTime(sTime)
+                        val aLT = TrainInfo.parseLocalTime(aTime)
+                        if ((pLT != null) && (aLT != null)) {
+                            val pT = (pLT.hour * 60) + pLT.minute
+                            var rT = (aLT.hour * 60) + aLT.minute
+                            if ((rT < pT) && ((pT - rT) > 720)) rT += 1440
+                            val dM = rT - pT
+                            if (dM > 0) dStr = "+$dM Min."
+                        }
                     }
+                    if (cancelled) dStr = "entfällt"
+                    fullStops.add(TrainStop(stopName, sTime, aTime, dStr, cancelled))
                 }
-                if (cancelled) dStr = "entfällt"
-                fullStops.add(TrainStop(stopName, sTime, aTime, dStr, cancelled))
+                
+                if (fullStops.isNotEmpty()) {
+                    return train.copy(stops = fullStops)
+                }
+            } catch (_: Exception) { }
+            if (attempt == 1) {
+                delay(250.milliseconds)
             }
-            
-            if (fullStops.isNotEmpty()) {
-                return train.copy(stops = fullStops)
-            }
-        } catch (_: Exception) { }
+        }
         return train
     }
 

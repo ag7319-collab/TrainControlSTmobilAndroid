@@ -270,11 +270,22 @@ class TrainViewModel(
             res[0]
         } ?: home
 
-        if ((currentStation.name == home.name) || (currentStation.name == work.name)) {
-            val targetStation = if (currentStation.name == home.name) work else home
-            fetchTrains(currentStation, targetStation)
+        val useGpsWork = prefs.getBoolean("use_gps_work", false)
+
+        if (useGpsWork) {
+            if (currentStation.name == home.name) {
+                fetchTrains(home, work)
+            } else {
+                prefs.edit { putString("work_station", currentStation.name) }
+                fetchTrains(currentStation, home)
+            }
         } else {
-            _uiState.value = UIState.LocationSelection(currentStation, home, work)
+            if ((currentStation.name == home.name) || (currentStation.name == work.name)) {
+                val targetStation = if (currentStation.name == home.name) work else home
+                fetchTrains(currentStation, targetStation)
+            } else {
+                _uiState.value = UIState.LocationSelection(currentStation, home, work)
+            }
         }
     }
 
@@ -710,7 +721,16 @@ fun TrainItem(train: TrainInfo, target: StationData, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TripDetailBottomSheet(train: TrainInfo, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    BackHandler(enabled = true) {
+        onDismiss()
+    }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()) {
             fun cleanStationName(name: String): String {
                 return name.split("/").first()
@@ -880,6 +900,7 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
     
     var homeStation by remember { mutableStateOf(prefs.getString("home_station", "Brixen / Bressanone") ?: "Brixen / Bressanone") }
     var workStation by remember { mutableStateOf(prefs.getString("work_station", "Bozen / Bolzano") ?: "Bozen / Bolzano") }
+    var useGpsWork by remember { mutableStateOf(prefs.getBoolean("use_gps_work", false)) }
     var alarmCount by remember { mutableIntStateOf(prefs.getInt("alarm_train_count", 3)) }
     
     val timer1Enabled = remember { mutableStateOf(prefs.getBoolean("timer_1_enabled", false)) }
@@ -919,7 +940,20 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                 StationSpinner(stationNames, homeStation) { homeStation = it }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Arbeitsbahnhof", fontWeight = FontWeight.Bold)
-                StationSpinner(stationNames, workStation) { workStation = it }
+                StationSpinner(stationNames, workStation, enabled = !useGpsWork) { workStation = it }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { useGpsWork = !useGpsWork }
+                        .padding(vertical = 2.dp)
+                ) {
+                    Checkbox(
+                        checked = useGpsWork,
+                        onCheckedChange = { useGpsWork = it }
+                    )
+                    Text("GPS-Standort", style = MaterialTheme.typography.bodyMedium)
+                }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text("Verspätungen anzeigen", fontWeight = FontWeight.Bold)
                 AlarmSpinner(alarmCount) { alarmCount = it }
@@ -947,12 +981,13 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                     TextButton(onClick = onDismiss) { Text("Abbrechen") }
                     Button(
                         onClick = {
-                            if (homeStation == workStation) {
+                            if (!useGpsWork && homeStation == workStation) {
                                 Toast.makeText(context, "Stationen identisch!", Toast.LENGTH_SHORT).show()
                             } else {
                                 prefs.edit {
                                     putString("home_station", homeStation)
                                     putString("work_station", workStation)
+                                    putBoolean("use_gps_work", useGpsWork)
                                     putInt("alarm_train_count", alarmCount)
                                     putBoolean("timer_1_enabled", timer1Enabled.value)
                                     putInt("timer_1_hour", timer1Hour.intValue)
@@ -1085,12 +1120,25 @@ fun Material3TimePickerDialog(
 }
 
 @Composable
-fun StationSpinner(options: List<String>, selected: String, onSelected: (String) -> Unit) {
+fun StationSpinner(options: List<String>, selected: String, enabled: Boolean = true, onSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(value = false) }
+    val backgroundColor = if (enabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f)
+    val textColor = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
     Box {
-        Text(text = selected, modifier = Modifier.fillMaxWidth().clickable { expanded = true }.padding(8.dp).background(MaterialTheme.colorScheme.surfaceVariant).padding(8.dp))
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelected(option); expanded = false }) }
+        Text(
+            text = selected,
+            color = textColor,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (enabled) Modifier.clickable { expanded = true } else Modifier)
+                .padding(8.dp)
+                .background(backgroundColor)
+                .padding(8.dp)
+        )
+        if (enabled) {
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelected(option); expanded = false }) }
+            }
         }
     }
 }

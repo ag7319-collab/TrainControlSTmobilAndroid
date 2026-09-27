@@ -1,12 +1,22 @@
 package com.example.traincontrolstmobilandroid
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
+import android.location.Location
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.tasks.Tasks
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.milliseconds
 
 class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -17,10 +27,31 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
         val notificationHelper = NotificationHelper(applicationContext)
 
         val homeStationName = prefs.getString("home_station", "Brixen / Bressanone") ?: "Brixen / Bressanone"
-        val workStationName = prefs.getString("work_station", "Bozen / Bolzano") ?: "Bozen / Bolzano"
+        var workStationName = prefs.getString("work_station", "Bozen / Bolzano") ?: "Bozen / Bolzano"
+        val useGpsWork = prefs.getBoolean("use_gps_work", false)
 
         val allStations = loadStationsFromAssets(applicationContext)
-        
+
+        if (useGpsWork && ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val fusedLocationClient = LocationServices.getFusedLocationProviderClient(applicationContext)
+                val location = Tasks.await(fusedLocationClient.lastLocation, 3, TimeUnit.SECONDS)
+                if (location != null) {
+                    val currentStation = allStations.asSequence()
+                        .filter { !it.placeId.startsWith("9900") }
+                        .minByOrNull {
+                            val res = FloatArray(1)
+                            Location.distanceBetween(location.latitude, location.longitude, it.lat, it.lon, res)
+                            res[0]
+                        }
+                    if (currentStation != null && currentStation.name != homeStationName) {
+                        workStationName = currentStation.name
+                        prefs.edit { putString("work_station", currentStation.name) }
+                    }
+                }
+            } catch (_: Exception) { }
+        }
+
         val homeStation = allStations.firstOrNull { it.name == homeStationName } ?: return@withContext Result.failure()
         val workStation = allStations.firstOrNull { it.name == workStationName } ?: return@withContext Result.failure()
 
@@ -59,7 +90,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
                 title = "Zug-Anzeige",
                 isSilent = true,
             )
-            kotlinx.coroutines.delay(1000.milliseconds)
+            delay(1000.milliseconds)
             return@withContext Result.success()
         }
 
@@ -110,7 +141,7 @@ class TrainWorker(context: Context, params: WorkerParameters) : CoroutineWorker(
     private fun loadStationsFromAssets(context: Context): List<StationData> {
         return try {
             context.assets.open("stations.json").bufferedReader().use { reader ->
-                val json = org.json.JSONObject(reader.readText())
+                val json = JSONObject(reader.readText())
                 val array = json.getJSONArray("stations")
                 List(array.length()) { i ->
                     val s = array.getJSONObject(i)
