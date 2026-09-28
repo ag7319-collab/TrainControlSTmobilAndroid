@@ -959,6 +959,13 @@ fun SettingsDialog(onDismiss: () -> Unit, viewModel: TrainViewModel, prefs: Shar
                     }
                     workStation = chosen
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Rückfahrt über:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(start = 12.dp, top = 4.dp)
+                )
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
