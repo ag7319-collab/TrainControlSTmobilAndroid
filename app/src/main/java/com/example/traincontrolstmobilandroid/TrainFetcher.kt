@@ -34,9 +34,10 @@ class TrainFetcher(context: Context) {
         fromStation: StationData,
         targetStation: StationData,
         forceRefresh: Boolean = false,
+        includePreviousTrain: Boolean = false,
         onProgress: (String) -> Unit = {},
     ): List<TrainInfo> {
-        if (!forceRefresh) {
+        if (!forceRefresh && !includePreviousTrain) {
             val cached = getCachedTrains(fromStation.name, targetStation.name)
             if (cached != null) {
                 return cached
@@ -64,7 +65,7 @@ class TrainFetcher(context: Context) {
                 val efaFromId = fromStation.efaId ?: resolveEfaId(fromStation.name)
                 val efaToId = targetStation.efaId ?: resolveEfaId(targetStation.name)
 
-                val queryOffsets = listOf(120L, 0L)
+                val queryOffsets = if (includePreviousTrain) listOf(30L, 0L) else listOf(0L)
 
                 val (efaResults, rfiDoc) = coroutineScope {
                     val efaDeferreds = queryOffsets.map { offset ->
@@ -463,7 +464,7 @@ class TrainFetcher(context: Context) {
         }
 
         // Final filtering: remove trains that have truly departed based on updated delay info
-        val finalTrains = rawTrainList.asSequence().filter { train ->
+        val upcomingTrains = rawTrainList.asSequence().filter { train ->
             if (train.stopsAtTarget == false) return@filter false
             val bestRealTime = getBestRealTime(train) ?: train.time
             val actual = TrainInfo.calculateActualDateTime(
@@ -471,18 +472,46 @@ class TrainFetcher(context: Context) {
                 train.time,
                 bestRealTime,
             )
-            // Show trains until 2 minutes after their (possibly delayed) departure
             actual.isAfter(now.minusMinutes(2))
         }.sortedWith(compareBy({ it.planDate }, { it.time })).take(limit).toList()
 
-        val entry = CacheEntry(
-            fromName = fromStation.name,
-            toName = targetStation.name,
-            timestamp = System.currentTimeMillis(),
-            trains = finalTrains,
-        )
-        cacheEntry = entry
-        serializeCache(fromStation.name, targetStation.name, finalTrains)
+        val finalTrains = if (includePreviousTrain) {
+            val previousTrain = rawTrainList.asSequence().filter { train ->
+                if (train.stopsAtTarget == false) return@filter false
+                val bestRealTime = getBestRealTime(train) ?: train.time
+                val actual = TrainInfo.calculateActualDateTime(
+                    train.planDate ?: now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                    train.time,
+                    bestRealTime,
+                )
+                !actual.isAfter(now.minusMinutes(2))
+            }.maxByOrNull { train ->
+                val bestRealTime = getBestRealTime(train) ?: train.time
+                TrainInfo.calculateActualDateTime(
+                    train.planDate ?: now.format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                    train.time,
+                    bestRealTime,
+                )
+            }
+            if (previousTrain != null) {
+                listOf(previousTrain) + upcomingTrains
+            } else {
+                upcomingTrains
+            }
+        } else {
+            upcomingTrains
+        }
+
+        if (!includePreviousTrain) {
+            val entry = CacheEntry(
+                fromName = fromStation.name,
+                toName = targetStation.name,
+                timestamp = System.currentTimeMillis(),
+                trains = finalTrains,
+            )
+            cacheEntry = entry
+            serializeCache(fromStation.name, targetStation.name, finalTrains)
+        }
 
         return finalTrains
     }

@@ -296,8 +296,8 @@ class TrainViewModel(
         }
     }
 
-    fun fetchTrains(from: StationData, to: StationData, forceRefresh: Boolean = false) {
-        if (!forceRefresh) {
+    fun fetchTrains(from: StationData, to: StationData, forceRefresh: Boolean = false, includePreviousTrain: Boolean = false) {
+        if (!forceRefresh && !includePreviousTrain) {
             val cached = trainFetcher.getCachedTrains(from.name, to.name)
             if (cached != null) {
                 _uiState.value = UIState.Results(from, to, cached)
@@ -308,7 +308,7 @@ class TrainViewModel(
         _uiState.value = UIState.Loading()
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val trains = trainFetcher.fetchAndParseTrains(from, to, forceRefresh) { msg ->
+                val trains = trainFetcher.fetchAndParseTrains(from, to, forceRefresh = forceRefresh, includePreviousTrain = includePreviousTrain) { msg ->
                     _uiState.value = UIState.Loading(msg)
                 }
                 _uiState.value = UIState.Results(from, to, trains)
@@ -463,6 +463,7 @@ fun TrainApp(
                     onFinish = onFinish,
                     onChangeStation = { viewModel.showCustomSearch(state.from, state.to) },
                     onRefresh = { viewModel.fetchTrains(state.from, state.to, forceRefresh = true) },
+                    onFetchPreviousTrain = { viewModel.fetchTrains(state.from, state.to, forceRefresh = true, includePreviousTrain = true) },
                 ) {
                     viewModel.selectTrain(it)
                 }
@@ -543,6 +544,7 @@ fun ResultsScreen(
     onFinish: () -> Unit,
     onChangeStation: () -> Unit,
     onRefresh: () -> Unit,
+    onFetchPreviousTrain: () -> Unit,
     onTrainClick: (TrainInfo) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
@@ -577,19 +579,33 @@ fun ResultsScreen(
         }
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.End,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onRefresh) {
+            OutlinedButton(
+                onClick = onFetchPreviousTrain
+            ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = "Aktualisieren",
-                    tint = MainActivity.PrimaryColor
+                    contentDescription = "Voriger Zug",
+                    modifier = Modifier.size(18.dp)
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Voriger Zug", style = MaterialTheme.typography.bodySmall)
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(onClick = onFinish) {
-                Text("OK")
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Aktualisieren",
+                        tint = MainActivity.PrimaryColor
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = onFinish) {
+                    Text("OK")
+                }
             }
         }
     }
