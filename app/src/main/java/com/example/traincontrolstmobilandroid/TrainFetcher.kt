@@ -644,6 +644,27 @@ class TrainFetcher(context: Context) {
         return planned.plusMinutes(maxDelay.toLong()).format(DateTimeFormatter.ofPattern("HH:mm"))
     }
 
+    private fun fetchViaggiaTrenoJson(url: String): String? {
+        return try {
+            val res = Jsoup.connect(url)
+                .ignoreContentType(true)
+                .timeout(8000)
+                .userAgent("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("Accept", "application/json, text/plain, */*")
+                .header("Accept-Language", "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7")
+                .execute()
+
+            if (res.statusCode() != 200) return null
+            val body = res.body().trim()
+            if (body.startsWith("<") || body.contains("Access Denied", ignoreCase = true) || body.contains("Akamai", ignoreCase = true)) {
+                return null
+            }
+            body.ifEmpty { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun fetchViaggiaTrenoUpdate(train: TrainInfo): TrainInfo {
         val num = train.categoryNumber.filter { it.isDigit() }
         if (num.isBlank()) return train
@@ -652,27 +673,11 @@ class TrainFetcher(context: Context) {
             try {
                 // 1. Suche Zug für ID (Logik aus TreniRT: verwende infomobilita Endpoint)
                 val searchUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTrenoTrenoAutocomplete/$num"
-                var searchRes = try {
-                    Jsoup.connect(searchUrl)
-                        .ignoreContentType(true)
-                        .timeout(8000)
-                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-                        .execute()
-                        .body()
-                        .trim()
-                } catch (_: Exception) { "" }
+                var searchRes = fetchViaggiaTrenoJson(searchUrl) ?: ""
 
                 if (searchRes.isBlank() || (!searchRes.contains("|") && !searchRes.startsWith("{"))) {
                     val fallbackUrl = "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/cercaNumeroTreno/$num"
-                    searchRes = try {
-                        Jsoup.connect(fallbackUrl)
-                            .ignoreContentType(true)
-                            .timeout(8000)
-                            .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-                            .execute()
-                            .body()
-                            .trim()
-                    } catch (_: Exception) { "" }
+                    searchRes = fetchViaggiaTrenoJson(fallbackUrl) ?: ""
                 }
 
                 var trainNum = ""
@@ -712,12 +717,7 @@ class TrainFetcher(context: Context) {
                         "http://www.viaggiatreno.it/infomobilita/resteasy/viaggiatreno/andamentoTreno/$originId/$trainNum"
                     }
                     
-                    val andamentoRes = Jsoup.connect(andamentoUrl)
-                        .ignoreContentType(true)
-                        .timeout(8000)
-                        .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36")
-                        .execute()
-                        .body()
+                    val andamentoRes = fetchViaggiaTrenoJson(andamentoUrl) ?: continue
                     
                     val andamentoJson = JSONObject(andamentoRes)
                     val ritardo = andamentoJson.optInt("ritardo", -999)
